@@ -160,7 +160,7 @@ dialog::backdrop{background:rgba(16,24,40,.45)}
   <div class="topbar">
     <div>
       <h1>Video Analysis</h1>
-      <div class="small">Universal desktop + iPad analyser — originals remain untouched. <span id="modePill" class="mode-pill">Checking device…</span></div>
+      <div class="small">Universal desktop + iPad analyser v18 — originals remain untouched. <span id="modePill" class="mode-pill">Checking device…</span></div>
     </div>
     <div class="actions">
       <button class="btn soft" id="sessionSetupBtn" type="button">Session setup</button>
@@ -415,6 +415,31 @@ dialog::backdrop{background:rgba(16,24,40,.45)}
   </div>
 </dialog>
 
+<dialog id="exportReadyDialog">
+  <div class="modal">
+    <div class="topbar">
+      <div>
+        <h2 style="margin:0;font-size:20px">Session ready to save</h2>
+        <div class="small">Your analysis ZIP has been prepared.</div>
+      </div>
+      <button class="btn" id="closeExportReady" type="button">✕</button>
+    </div>
+
+    <div class="status ok" id="exportReadyStatus">
+      Tap <b>Share / Save ZIP</b>. On iPad choose <b>Save to Files</b>, <b>OneDrive</b>, AirDrop or another destination from the normal iOS share sheet.
+    </div>
+
+    <div id="exportReadyName" class="batch-summary" style="overflow-wrap:anywhere"></div>
+
+    <div class="actions" style="justify-content:flex-end;margin-top:14px">
+      <button class="btn soft" id="downloadExportBtn" type="button">Download ZIP</button>
+      <button class="btn primary" id="shareExportBtn" type="button">Share / Save ZIP</button>
+    </div>
+
+    <div id="exportReadyMsg" class="small" style="margin-top:8px"></div>
+  </div>
+</dialog>
+
 <dialog id="saveDialog">
   <form id="saveForm" class="modal">
     <div class="topbar">
@@ -506,6 +531,7 @@ const $ = id => document.getElementById(id);
 const state = {
   root:null, playersDir:null, dataDir:null, mobileDir:null, players:[], portableMode:false,
   batchSessions:[],
+  pendingExport:null,
   dualMode:false,
   fileA:null, fileB:null, urlA:null, urlB:null,
   cameraStream:null, mediaRecorder:null, recordedChunks:[], cameraActive:false,
@@ -578,11 +604,11 @@ function enterPortableMode(){
   $('portablePlayerTools').classList.add('active');
   $('startupAfterConnect').classList.remove('session-hidden');
   $('startupFolderStatus').className='status ok';
-  $('startupFolderStatus').innerHTML='<b>Portable mode.</b> No administrator access is needed. Add/select players below. Saving creates one session ZIP that can be kept in Files or OneDrive.';
+  $('startupFolderStatus').innerHTML='<b>Portable mode.</b> No administrator access is needed. Add/select players below. Saving prepares one session ZIP, then opens the iPad Share sheet so you can choose Files or OneDrive.';
   $('saveBtn').disabled=false;
   renderStartupPlayers();
   renderPlayers();
-  setStatus('<b>Portable mode:</b> analysis runs locally on this device. Save Analysis exports one session ZIP; your videos are not uploaded to the website.','ok');
+  setStatus('<b>Portable mode:</b> analysis runs locally on this device. Save Analysis prepares one ZIP, then Share / Save ZIP opens the native iPad share sheet. Your videos are not uploaded to the website.','ok');
 }
 
 function enterDesktopMode(){
@@ -2255,18 +2281,73 @@ async function exportPortableSession(players,date,cat,desc){
   entries.push({
     name:'README.txt',
     blob:new Blob([
-      `Video Analysis portable session\\nPlayers: ${players.join(', ')}\\nDate: ${date}\\nCategory: ${cat}\\nDescription: ${desc||''}\\n\\nThe JSON file stores editable annotations and playback settings.`
+      `Video Analysis portable session\nPlayers: ${players.join(', ')}\nDate: ${date}\nCategory: ${cat}\nDescription: ${desc||''}\n\nThe JSON file stores editable annotations and playback settings.`
     ],{type:'text/plain'})
   });
   const zip=await makeStoredZip(entries);
   const filename=`${base}_VideoAnalysis.zip`;
-  const url=URL.createObjectURL(zip);
-  const a=document.createElement('a');
-  a.href=url;a.download=filename;
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  const file=new File([zip],filename,{type:'application/zip',lastModified:Date.now()});
+  state.pendingExport={blob:zip,file,filename};
   return filename;
 }
+
+function clearPendingExport(){
+  state.pendingExport=null;
+  $('exportReadyMsg').textContent='';
+}
+function openExportReady(){
+  const exp=state.pendingExport;
+  if(!exp)return;
+  $('exportReadyName').innerHTML=`<b>${safeName(exp.filename)}</b><br><span class="small">${(exp.blob.size/1024/1024).toFixed(1)} MB</span>`;
+  $('exportReadyMsg').textContent='';
+  if(!$('exportReadyDialog').open)$('exportReadyDialog').showModal();
+}
+async function sharePendingExport(){
+  const exp=state.pendingExport;
+  if(!exp)return;
+  $('exportReadyMsg').textContent='';
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[exp.file]}))){
+      await navigator.share({
+        files:[exp.file],
+        title:'Video Analysis session',
+        text:'Video Analysis session ZIP'
+      });
+      $('exportReadyMsg').textContent='Share sheet opened successfully. Choose Save to Files or OneDrive to keep the session.';
+      return;
+    }
+    $('exportReadyMsg').textContent='Native file sharing is not available here. Use Download ZIP instead.';
+  }catch(err){
+    if(err?.name==='AbortError'){
+      $('exportReadyMsg').textContent='Share cancelled. Tap Share / Save ZIP again when ready.';
+    }else{
+      $('exportReadyMsg').textContent='Could not open the share sheet. Try Download ZIP instead.';
+    }
+  }
+}
+function downloadPendingExport(){
+  const exp=state.pendingExport;
+  if(!exp)return;
+  try{
+    const url=URL.createObjectURL(exp.blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=exp.filename;
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    $('exportReadyMsg').textContent='Download requested. If nothing appears on iPad, use Share / Save ZIP instead.';
+  }catch(err){
+    $('exportReadyMsg').textContent='Download could not start. Use Share / Save ZIP instead.';
+  }
+}
+$('shareExportBtn').addEventListener('click',sharePendingExport);
+$('downloadExportBtn').addEventListener('click',downloadPendingExport);
+$('closeExportReady').addEventListener('click',()=>{
+  if($('exportReadyDialog').open)$('exportReadyDialog').close();
+});
 function analysisData(players,date,cat,desc){
   const sessionId=(crypto?.randomUUID?.()||(`session-${Date.now()}-${Math.random().toString(16).slice(2)}`));
   return {
@@ -2292,7 +2373,8 @@ $('saveForm').addEventListener('submit',async ev=>{
     if(state.portableMode){
       const filename=await exportPortableSession(players,date,cat,desc);
       $('saveDialog').close();
-      setStatus(`Portable session exported as <b>${safeName(filename)}</b>. For the quickest desktop import, upload it in OneDrive to <b>Video Analysis → Mobile Uploads</b>. You can upload several session ZIPs before returning to the desktop.`,'ok');
+      setStatus(`Session ZIP prepared as <b>${safeName(filename)}</b>. Tap <b>Share / Save ZIP</b> and choose Files or OneDrive.`,'ok');
+      openExportReady();
       return;
     }
     const session=`${date} ${safeName(cat)}${desc?' - '+safeName(desc):''}`;
