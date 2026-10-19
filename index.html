@@ -1,0 +1,3676 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#175cd3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Video Analysis">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Video Analysis</title>
+<style>
+:root{
+  --bg:#f5f7fb; --card:#fff; --text:#172033; --muted:#667085; --line:#d8dee9;
+  --accent:#175cd3; --accent2:#e8f1ff; --danger:#b42318; --ok:#067647;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+.wrap{max-width:1500px;margin:0 auto;padding:16px}
+.topbar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:22px;margin:0}
+.small{font-size:13px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:9px;padding:9px 12px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.soft{background:var(--accent2);border-color:#bfd4ff;color:#0b4aa2}
+.status{padding:10px 12px;border-radius:9px;background:#f9fafb;border:1px solid var(--line);font-size:13px}
+.status.ok{color:var(--ok)}
+.status.err{color:var(--danger)}
+.video-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.video-grid.overlay-mode{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  grid-template-areas:
+    "headA headB"
+    "video video"
+    "controlsA controlsB";
+  gap:10px 14px;
+}
+.video-grid.overlay-mode #panelA,
+.video-grid.overlay-mode #panelB{display:contents}
+.video-grid.overlay-mode #panelA>.topbar{grid-area:headA;margin:0!important}
+.video-grid.overlay-mode #panelB>.topbar{grid-area:headB;margin:0!important}
+.video-grid.overlay-mode #boxA,
+.video-grid.overlay-mode #boxB{
+  grid-area:video;
+  width:100%;
+  min-width:0;
+}
+.video-grid.overlay-mode #boxB{z-index:1;pointer-events:none}
+.video-grid.overlay-mode #boxA{z-index:2;background:transparent}
+.video-grid.overlay-mode #panelA>.controls{grid-area:controlsA}
+.video-grid.overlay-mode #panelB>.controls{grid-area:controlsB}
+.video-grid.overlay-mode #boxB .tool-drawer-toggle,
+.video-grid.overlay-mode #boxB .tool-drawer,
+.video-grid.overlay-mode #boxB .video-controls-overlay,
+.video-grid.overlay-mode #boxB .desktop-zoom-controls{display:none!important}
+.video-grid.overlay-mode .media-layer video{background:transparent}
+.video-grid.overlay-mode #boxB{background:#111}
+
+.overlay-blend-float{
+  display:none;
+  position:absolute;
+  left:10px;
+  top:10px;
+  z-index:8;
+  flex-direction:column;
+  align-items:stretch;
+  gap:7px;
+  width:min(610px,calc(100% - 150px));
+  padding:8px 9px;
+  border-radius:10px;
+  background:rgba(0,0,0,.68);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.18);
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+}
+.video-grid.overlay-mode .overlay-blend-float{display:flex}
+.overlay-blend-row{display:flex;align-items:center;gap:7px;min-width:0}
+.overlay-blend-float .blend-end{font-size:12px;font-weight:650;white-space:nowrap}
+.overlay-blend-float input[type=range]{min-width:80px;flex:1}
+.overlay-blend-float output{font-size:12px;min-width:92px;text-align:right;font-variant-numeric:tabular-nums}
+.overlay-align-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.overlay-align-label{font-size:12px;font-weight:650;margin-right:2px}
+.overlay-layer-btn,.overlay-reset-btn{
+  border:1px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  border-radius:7px;
+  min-height:30px;
+  padding:4px 9px;
+  font:inherit;
+  font-size:12px;
+  cursor:pointer;
+}
+.overlay-layer-btn.active{
+  background:#fff;
+  color:#111;
+  border-color:#fff;
+}
+.overlay-reset-btn{margin-left:3px}
+.overlay-align-status{
+  margin-left:auto;
+  font-size:11px;
+  color:rgba(255,255,255,.78);
+  white-space:nowrap;
+}
+.video-grid.overlay-mode #boxA.overlay-moving-a .overlay{cursor:grab}
+.video-grid.overlay-mode #boxA.overlay-moving-b .overlay{cursor:grab}
+.video-grid.overlay-mode #boxA.overlay-layer-dragging .overlay{cursor:grabbing!important}
+
+.video-grid.overlay-focus-fullscreen{
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  height:100dvh!important;
+  z-index:10000!important;
+  margin:0!important;
+  padding:0!important;
+  gap:0!important;
+  background:#000!important;
+  grid-template-columns:1fr!important;
+  grid-template-areas:"video"!important;
+}
+.video-grid.overlay-focus-fullscreen #panelA>.topbar,
+.video-grid.overlay-focus-fullscreen #panelB>.topbar,
+.video-grid.overlay-focus-fullscreen #panelA>.controls,
+.video-grid.overlay-focus-fullscreen #panelB>.controls{display:none!important}
+.video-grid.overlay-focus-fullscreen #boxA,
+.video-grid.overlay-focus-fullscreen #boxB{
+  width:100%!important;
+  height:100%!important;
+  aspect-ratio:auto!important;
+  border-radius:0!important;
+}
+.video-grid.overlay-focus-fullscreen .overlay-blend-float{
+  top:calc(10px + env(safe-area-inset-top));
+  left:calc(10px + env(safe-area-inset-left));
+}
+.video-grid.overlay-focus-fullscreen #boxA .tool-drawer-toggle{
+  top:calc(10px + env(safe-area-inset-top));
+  right:calc(10px + env(safe-area-inset-right));
+}
+.video-grid.overlay-focus-fullscreen #boxA .tool-drawer{
+  top:calc(58px + env(safe-area-inset-top));
+  right:calc(10px + env(safe-area-inset-right));
+  max-height:calc(100dvh - 150px);
+  overflow:auto;
+}
+.video-grid.overlay-focus-fullscreen #boxA .video-controls-overlay{
+  left:calc(10px + env(safe-area-inset-left));
+  right:calc(10px + env(safe-area-inset-right));
+  bottom:calc(10px + env(safe-area-inset-bottom));
+}
+.video-grid.overlay-focus-fullscreen #boxA .desktop-zoom-controls{
+  left:calc(10px + env(safe-area-inset-left));
+  bottom:calc(72px + env(safe-area-inset-bottom));
+}
+@media (max-width:720px){
+  .video-grid.overlay-mode{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "headA"
+      "headB"
+      "video"
+      "controlsA"
+      "controlsB";
+  }
+  .overlay-blend-float{
+    width:calc(100% - 20px);
+    top:8px;
+  }
+  .overlay-blend-float output{display:none}
+  .overlay-align-status{display:none}
+  .overlay-reset-btn{margin-left:0}
+}
+
+.video-panel-hidden{display:none}
+.compare-controls{display:none;gap:8px;flex-wrap:wrap;align-items:center}
+.compare-controls.active{display:flex}
+@media (orientation:landscape) and (min-width:720px){
+  .video-grid.dual-mode{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@media (pointer:coarse){
+  .btn{min-height:44px;padding:10px 14px}
+  .toolbar{gap:10px}
+  input[type=range]{min-height:36px}
+}
+.video-box{position:relative;background:#111;border-radius:10px;overflow:hidden;aspect-ratio:16/9;touch-action:none}
+.media-layer{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.media-layer video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;background:#111}
+.overlay{position:absolute;inset:0;width:100%;height:100%;touch-action:none;z-index:2}
+.video-controls-overlay{
+  position:absolute;left:8px;right:8px;bottom:8px;z-index:5;
+  display:grid;grid-template-columns:auto auto auto auto minmax(80px,1fr) auto;gap:8px;align-items:center;
+  padding:7px 9px;border-radius:10px;background:rgba(0,0,0,.62);color:#fff;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+}
+.video-controls-overlay button{
+  border:0;background:transparent;color:#fff;padding:6px 8px;border-radius:7px;min-width:40px;min-height:38px;
+}
+.icon{width:20px;height:20px;display:block;flex:0 0 auto}
+.icon-sm{width:16px;height:16px}
+.icon-label{display:inline-flex;align-items:center;gap:7px}
+.video-controls-overlay button{
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background .16s ease,color .16s ease,transform .12s ease;
+}
+.video-controls-overlay button:hover{background:rgba(255,255,255,.12)}
+.video-controls-overlay button:active{transform:scale(.94)}
+.video-controls-overlay button[aria-pressed="true"]{background:rgba(255,255,255,.94);color:#111}
+.tool-drawer-toggle{display:inline-flex!important;align-items:center;gap:7px}
+.tool-drawer .btn{display:inline-flex;align-items:center;gap:7px}
+body.video-focus-open{overflow:hidden}
+.video-box.focus-fullscreen{
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  height:100dvh!important;
+  max-width:none!important;
+  aspect-ratio:auto!important;
+  border-radius:0!important;
+  z-index:10000!important;
+  background:#000!important;
+}
+.video-box.focus-fullscreen .video-controls-overlay{
+  left:calc(10px + env(safe-area-inset-left));
+  right:calc(10px + env(safe-area-inset-right));
+  bottom:calc(10px + env(safe-area-inset-bottom));
+}
+.video-box.focus-fullscreen .tool-drawer-toggle{
+  top:calc(10px + env(safe-area-inset-top));
+  right:calc(10px + env(safe-area-inset-right));
+}
+.video-box.focus-fullscreen .tool-drawer{
+  top:calc(58px + env(safe-area-inset-top));
+  right:calc(10px + env(safe-area-inset-right));
+  max-height:calc(100dvh - 150px);
+  overflow:auto;
+}
+.desktop-zoom-controls{
+  display:none;
+  position:absolute;
+  left:10px;
+  bottom:64px;
+  z-index:7;
+  align-items:center;
+  gap:5px;
+  padding:5px;
+  border-radius:10px;
+  background:rgba(0,0,0,.62);
+  color:#fff;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+  border:1px solid rgba(255,255,255,.18);
+}
+.desktop-zoom-controls button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:36px;
+  padding:0;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+}
+.desktop-zoom-controls button:hover{background:rgba(255,255,255,.14)}
+.video-box.pan-active .overlay{cursor:grab}
+.video-box.pan-dragging .overlay{cursor:grabbing}
+.video-box.space-pan .overlay{cursor:grab!important}
+.video-box.space-pan.pan-dragging .overlay{cursor:grabbing!important}
+
+.desktop-zoom-value{
+  min-width:48px;
+  text-align:center;
+  font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+.video-box.focus-fullscreen .desktop-zoom-controls{
+  left:calc(10px + env(safe-area-inset-left));
+  bottom:calc(72px + env(safe-area-inset-bottom));
+}
+@media (any-pointer:fine){
+  .desktop-zoom-controls{display:flex}
+}
+
+
+.video-controls-overlay button:active{background:rgba(255,255,255,.16)}
+.video-controls-overlay input[type=range]{width:100%;margin:0;accent-color:#fff;min-height:30px}
+.video-time{font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (pointer:coarse){
+  .video-controls-overlay{left:6px;right:6px;bottom:6px;padding:8px 10px}
+  .video-controls-overlay button{min-width:48px;min-height:46px}
+  .video-controls-overlay input[type=range]{min-height:40px}
+  .video-time{font-size:13px}
+}
+.controls{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.range-row{display:grid;grid-template-columns:130px 1fr 70px;gap:8px;align-items:center}
+.range-row output{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+input[type=range]{width:100%}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tool-drawer-toggle{
+  position:absolute;top:10px;right:10px;z-index:7;
+  border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.62);color:#fff;
+  border-radius:10px;padding:8px 11px;min-height:40px;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+}
+.tool-drawer{
+  position:absolute;top:58px;right:10px;z-index:7;width:min(330px,calc(100% - 20px));
+  display:none;gap:8px;flex-wrap:wrap;padding:10px;border-radius:12px;
+  background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.3);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+.tool-drawer.open{display:flex}
+.tool-drawer .btn{
+  background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.28);color:#fff;
+}
+.tool-drawer .btn.soft{
+  background:#fff;color:#111;border-color:#fff;
+}
+.tool-drawer input[type=color]{
+  width:44px;height:44px;padding:3px;border-radius:9px;border:1px solid rgba(255,255,255,.28);background:transparent;
+}
+@media (pointer:coarse){
+  .tool-drawer-toggle{min-height:46px;min-width:46px;font-size:15px}
+  .tool-drawer{top:64px;gap:10px;padding:12px}
+  .tool-drawer .btn{min-height:46px}
+}
+.swatch{width:34px;height:34px;border-radius:50%;border:2px solid transparent;padding:0}
+.swatch.sel{outline:3px solid #98a2b3}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:13px;font-weight:600}
+input[type=text],input[type=date],select,textarea{width:100%;margin-top:5px;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}
+dialog{border:0;border-radius:14px;padding:0;width:min(760px,94vw);box-shadow:0 24px 80px rgba(0,0,0,.28)}
+dialog::backdrop{background:rgba(16,24,40,.45)}
+.modal{padding:18px}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px}
+.player{display:flex;gap:8px;align-items:center;border:1px solid var(--line);padding:8px;border-radius:8px;font-weight:500}
+.local-player-badge{
+  margin-left:auto;
+  padding:2px 6px;
+  border-radius:999px;
+  border:1px solid #d5dbe5;
+  background:#f6f8fb;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:600;
+  white-space:nowrap;
+}
+
+.session-list{display:grid;gap:8px;max-height:360px;overflow:auto}
+.session-item{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px}
+.session-item .meta{min-width:0}
+.session-item .meta b,.session-item .meta span{display:block;overflow-wrap:anywhere}
+.session-types{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.session-type{position:relative}
+.session-type input{position:absolute;opacity:0;pointer-events:none}
+.session-type label{display:block;height:100%;border:1px solid var(--line);border-radius:11px;padding:12px;cursor:pointer;background:#fff}
+.session-type input:checked+label{border-color:var(--accent);background:var(--accent2);box-shadow:0 0 0 2px rgba(23,92,211,.12)}
+.session-type label b{display:block;margin-bottom:4px}
+.session-section{margin-top:14px}
+.session-hidden{display:none!important}
+.startup-saved-list{display:grid;gap:8px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px}
+.startup-saved-item{display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:8px}
+.startup-saved-item input{margin-top:3px}
+@media (max-width:650px){.session-types{grid-template-columns:1fr}}
+.portable-tools{display:none;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#f9fafb}
+.portable-tools.active{display:block}
+.portable-tools textarea{width:100%;min-height:72px;margin-top:6px;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}
+.roster-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.roster-controls{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:8px;
+  margin-top:9px;
+}
+.roster-controls.roster-controls-single{grid-template-columns:minmax(0,1fr)}
+#startupPlayersList{grid-template-columns:1fr;max-height:440px}
+.roster-controls select,.roster-controls input{
+  width:100%;
+  min-height:42px;
+  margin-top:4px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  padding:8px 9px;
+  background:#fff;
+  font:inherit;
+}
+.roster-help{margin-top:8px;line-height:1.45}
+.roster-zero-warning{
+  display:block;
+  margin-top:4px;
+  padding:7px 8px;
+  border-radius:8px;
+  border:1px solid #efc7c3;
+  background:#fff5f4;
+  color:#8d2520!important;
+}
+
+.temporary-player-panel{
+  margin-top:10px;
+  border-top:1px solid var(--line);
+  padding-top:9px;
+}
+.temporary-player-panel summary{
+  cursor:pointer;
+  font-size:13px;
+  font-weight:650;
+}
+.warning-text{
+  margin-top:7px;
+  padding:8px 9px;
+  border-radius:8px;
+  border:1px solid #ead7a4;
+  background:#fffaf0;
+  color:#73510b;
+}
+.player-list-empty{
+  grid-column:1/-1;
+  padding:12px;
+  text-align:center;
+  color:var(--muted);
+  font-size:13px;
+}
+@media (max-width:650px){
+  .roster-controls{grid-template-columns:1fr}
+}
+
+.mode-pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#eef2f6;font-size:12px;font-weight:600}
+.ios-install-hint{
+  display:none;
+  position:fixed;
+  left:12px;
+  right:12px;
+  top:calc(12px + env(safe-area-inset-top));
+  z-index:20000;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(17,24,39,.96);
+  color:#fff;
+  box-shadow:0 8px 28px rgba(0,0,0,.28);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.ios-install-hint.show{display:flex;align-items:center;gap:10px}
+.ios-install-hint .grow{flex:1;min-width:0}
+.ios-install-hint .small{color:rgba(255,255,255,.78)}
+.ios-install-hint button{
+  border:1px solid rgba(255,255,255,.3);
+  background:rgba(255,255,255,.1);
+  color:#fff;
+  border-radius:8px;
+  min-height:38px;
+  padding:7px 10px;
+}
+@media (display-mode:standalone),(display-mode:fullscreen){
+  .ios-install-hint{display:none!important}
+}
+
+.batch-list{display:grid;gap:8px;max-height:360px;overflow:auto;margin-top:10px}
+.batch-item{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+.batch-item.ok{border-left:4px solid #198754}
+.batch-item.warn{border-left:4px solid #c78100}
+.batch-item.err{border-left:4px solid #c9302c}
+.batch-item .batch-title{font-weight:700;margin-bottom:3px}
+.batch-item .batch-meta{font-size:12px;color:var(--muted);line-height:1.45}
+.batch-edit-grid{display:grid;grid-template-columns:160px 180px 1fr;gap:8px;margin-top:9px}
+.batch-edit-grid label{font-size:12px;font-weight:600}
+.batch-edit-grid input,.batch-edit-grid select,.batch-edit-grid textarea{
+  width:100%;margin-top:4px;border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;font:inherit
+}
+.batch-edit-grid textarea{min-height:58px;resize:vertical}
+.batch-edit-wide{grid-column:1/-1}
+.batch-preview-path{margin-top:8px;padding:7px 8px;border-radius:8px;background:#f7f9fc;border:1px dashed var(--line);font-size:12px}
+@media (max-width:760px){.batch-edit-grid{grid-template-columns:1fr}}
+
+.batch-summary{margin-top:10px;padding:10px;border-radius:9px;background:#f7f9fc;border:1px solid var(--line)}
+
+
+.preview{white-space:pre-wrap;font-family:Consolas,monospace;background:#f9fafb;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px;max-height:250px;overflow:auto}
+.sep{height:1px;background:var(--line);margin:12px 0}
+.kbd{font-family:Consolas,monospace;background:#eef2f6;border:1px solid var(--line);padding:2px 6px;border-radius:5px}
+@media (max-width:650px){.meta-grid{grid-template-columns:1fr}.players{grid-template-columns:1fr}.range-row{grid-template-columns:100px 1fr 60px}}
+</style>
+</head>
+<body>
+<div class="ios-install-hint" id="iosInstallHint">
+  <div class="grow">
+    <b>Open full screen on iPad</b>
+    <div class="small">Safari bars are hidden when Video Analysis is launched from the Home Screen: Share → Add to Home Screen → Open as Web App.</div>
+  </div>
+  <button id="dismissIosHint" type="button">Got it</button>
+</div>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Video Analysis</h1>
+      <div class="small">Universal desktop + iPad analyser v39 — live GitHub player roster. <span id="modePill" class="mode-pill">Checking device…</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn soft" id="sessionSetupBtn" type="button">Session setup</button>
+      <button class="btn soft" id="selectRootBtn">Select Video Analysis Folder</button>
+      <button class="btn soft" id="batchImportBtn" type="button" disabled>⇧ Import Mobile Sessions</button>
+      <button class="btn" id="openSavedBtn" disabled hidden>Open saved analysis</button>
+      <button class="btn" id="importOldBtn" disabled hidden>Import old analysis</button>
+      <button class="btn primary" id="saveBtn" disabled>Save Analysis</button>
+      <button class="btn" id="closeAppBtn" type="button" style="display:none">Close App</button>
+    </div>
+  </div>
+
+  <div id="rootStatus" class="status">1) Select your synced <b>Video Analysis</b> folder. The app will look for <b>Players</b> inside it.</div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="actions">
+      <label class="btn primary">Load video<input id="fileA" type="file" accept="video/*" hidden></label>
+      <button class="btn soft" id="openCameraBtn" type="button">📷 Open camera</button>
+      <button class="btn primary" id="startRecordBtn" type="button" style="display:none">● Start recording</button>
+      <button class="btn" id="stopRecordBtn" type="button" style="display:none">■ Stop recording</button>
+      <button class="btn" id="closeCameraBtn" type="button" style="display:none">Close camera</button>
+      <button class="btn soft" id="addSecondBtn" type="button">＋ Add second video</button>
+      <div id="compareControls" class="compare-controls">
+        <label class="btn">Load / replace Video B<input id="fileB" type="file" accept="video/*" hidden></label>
+        <button class="btn" id="removeSecondBtn" type="button">Remove second video</button>
+        <button class="btn" id="playBoth" type="button">▶ Play both</button>
+        <label class="row" style="padding:0 6px"><input id="linkPlayback" type="checkbox" checked> Link playback</label>
+        <button class="btn icon-label" id="overlayModeBtn" type="button" disabled aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3L3 8l9 5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg><span>Overlay videos</span></button>
+        <button class="btn" id="alignBtn" type="button">Align current frames</button>
+      </div>
+    </div>
+    <div id="layoutHint" class="small" style="margin-top:8px">Single-video analysis mode. Add a second video only when you want comparison.</div>
+  </div>
+
+  <div id="videoGrid" class="video-grid" style="margin-top:14px">
+    <section class="card" id="panelA">
+      <div class="topbar" style="margin-bottom:8px">
+        <div><b id="titleA">Video</b><div id="nameA" class="small">No video loaded</div></div>
+        <div class="actions">
+          <button class="btn icon-label" id="playA"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><span>Play</span></button>
+          <button class="btn icon-label" id="shotA"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z"/><circle cx="12" cy="13" r="4"/></svg><span>Screenshot</span></button>
+          <button class="btn icon-label" id="resetZoomA" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v6h6"/><path d="M5.5 15a7 7 0 101.2-8.3L4 10"/></svg><span>Reset zoom</span></button>
+          <span id="zoomAOut" class="small" style="align-self:center">100%</span>
+        </div>
+      </div>
+      <div class="video-box" id="boxA">
+        <div class="media-layer" id="mediaLayerA">
+          <video id="videoA" playsinline></video>
+          <canvas id="canvasA" class="overlay"></canvas>
+        </div>
+        <button class="tool-drawer-toggle" id="toolDrawerToggleA" type="button" aria-expanded="false" aria-controls="toolDrawerA"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l5-5"/><path d="M14 4a5 5 0 00-5.5 6.8L4 15.3 8.7 20l4.5-4.5A5 5 0 0019.8 10l-3.3 3.3-3-3L16.8 7A5 5 0 0014 4z"/></svg><span>Tools</span><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9l5 5 5-5"/></svg></button>
+        <div class="tool-drawer" id="toolDrawerA">
+          <button class="btn toolA" data-tool="free" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 00-3-3l-10 10z"/><path d="M14 7l3 3"/></svg><span>Freehand</span></button>
+          <button class="btn toolA" data-tool="line" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19L19 5"/></svg><span>Line</span></button>
+          <button class="btn toolA" data-tool="rect" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/></svg><span>Rectangle</span></button>
+          <button class="btn toolA" data-tool="circle" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg><span>Circle</span></button>
+          <button class="btn toolA" data-tool="angle" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19L12 6l8 13"/><path d="M9.5 15a5 5 0 005 0"/></svg><span>Angle</span></button>
+          <button class="btn toolA" data-tool="edit" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l7 16 2-7 7-2z"/><path d="M13 13l6 6"/></svg><span>Select / Edit</span></button>
+          <button class="btn toolA" data-tool="pan" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V5a2 2 0 014 0v5"/><path d="M12 10V4a2 2 0 014 0v7"/><path d="M16 11V6a2 2 0 014 0v8"/><path d="M8 10a2 2 0 00-4 0v4c0 4 3 7 7 7h2c5 0 8-3 8-8v-2a2 2 0 00-4 0"/><path d="M4 13l-1-1a2 2 0 00-3 3l4 4"/></svg><span>Pan</span></button>
+          <button class="btn" id="undoA" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M5 12h8a6 6 0 016 6"/></svg><span>Undo</span></button>
+          <button class="btn" id="clearA" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span>Clear</span></button>
+          <input id="colorA" type="color" value="#ff0000" title="Drawing colour" aria-label="Drawing colour">
+        </div>
+        <div class="desktop-zoom-controls" id="desktopZoomControlsA">
+          <button id="zoomOutA" type="button" aria-label="Zoom out Video A" title="Zoom out"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></svg></button>
+          <span class="desktop-zoom-value" id="desktopZoomValueA">100%</span>
+          <button id="zoomInA" type="button" aria-label="Zoom in Video A" title="Zoom in"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6M10.5 7.5v6"/></svg></button>
+        </div>
+        <div class="overlay-blend-float" id="overlayBlendControl">
+          <div class="overlay-blend-row">
+            <span class="blend-end">Video B</span>
+            <input id="overlayBlend" type="range" min="0" max="100" step="1" value="50" aria-label="Video blend: left for Video B, right for Video A">
+            <span class="blend-end">Video A</span>
+            <output id="overlayBlendOut">B 50% · A 50%</output>
+          </div>
+          <div class="overlay-align-row" role="group" aria-label="Choose video layer to pan">
+            <span class="overlay-align-label">Active layer</span>
+            <button class="overlay-layer-btn active" id="panLayerA" type="button" aria-pressed="true">A</button>
+            <button class="overlay-layer-btn" id="panLayerB" type="button" aria-pressed="false">B</button>
+            <button class="overlay-reset-btn" id="resetOverlayAlignment" type="button">Reset alignment</button>
+            <span class="overlay-align-status" id="overlayAlignStatus">Video A · pan + zoom</span>
+          </div>
+        </div>
+        <div class="video-controls-overlay" id="overlayControlsA">
+          <button id="overlayPlayA" type="button" aria-label="Play Video A" title="Play"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
+          <button id="muteA" type="button" aria-label="Mute Video A" title="Mute audio"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15 9a4 4 0 010 6M17.5 6.5a8 8 0 010 11"/></svg></button>
+          <button id="loopA" type="button" aria-label="Loop Video A" title="Loop video" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 013-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 01-3 3H3"/></svg></button>
+          <button id="focusA" type="button" aria-label="Expand Video A" title="Full screen" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>
+          <input id="seekA" type="range" min="0" max="100" step="0.01" value="0" aria-label="Video A timeline">
+          <span id="overlayTimeA" class="video-time">0:00 / 0:00</span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="range-row"><label>Speed</label><input id="speedA" type="range" min="0.1" max="4" step="0.05" value="1"><output id="speedAOut">1.00×</output></div>
+        <div class="range-row"><label>Offset</label><input id="offsetA" type="range" min="-5" max="5" step="0.04" value="0"><output id="offsetAOut">0.00 s</output></div>
+        <div class="row"><button class="btn icon-label" id="backA"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5v14"/><path d="M18 6l-8 6 8 6z"/></svg><span>1 frame</span></button><button class="btn icon-label" id="fwdA"><span>1 frame</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 5v14"/><path d="M6 6l8 6-8 6z"/></svg></button><span class="small" id="timeA">0.00 s</span></div>
+      </div>
+    </section>
+
+    <section class="card video-panel-hidden" id="panelB">
+      <div class="topbar" style="margin-bottom:8px">
+        <div><b>Video B</b><div id="nameB" class="small">No video loaded</div></div>
+        <div class="actions">
+          <button class="btn icon-label" id="playB"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg><span>Play</span></button>
+          <button class="btn icon-label" id="shotB"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z"/><circle cx="12" cy="13" r="4"/></svg><span>Screenshot</span></button>
+          <button class="btn icon-label" id="resetZoomB" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v6h6"/><path d="M5.5 15a7 7 0 101.2-8.3L4 10"/></svg><span>Reset zoom</span></button>
+          <span id="zoomBOut" class="small" style="align-self:center">100%</span>
+        </div>
+      </div>
+      <div class="video-box" id="boxB">
+        <div class="media-layer" id="mediaLayerB">
+          <video id="videoB" playsinline></video>
+          <canvas id="canvasB" class="overlay"></canvas>
+        </div>
+        <button class="tool-drawer-toggle" id="toolDrawerToggleB" type="button" aria-expanded="false" aria-controls="toolDrawerB"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l5-5"/><path d="M14 4a5 5 0 00-5.5 6.8L4 15.3 8.7 20l4.5-4.5A5 5 0 0019.8 10l-3.3 3.3-3-3L16.8 7A5 5 0 0014 4z"/></svg><span>Tools</span><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9l5 5 5-5"/></svg></button>
+        <div class="tool-drawer" id="toolDrawerB">
+          <button class="btn toolB" data-tool="free" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 00-3-3l-10 10z"/><path d="M14 7l3 3"/></svg><span>Freehand</span></button>
+          <button class="btn toolB" data-tool="line" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19L19 5"/></svg><span>Line</span></button>
+          <button class="btn toolB" data-tool="rect" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/></svg><span>Rectangle</span></button>
+          <button class="btn toolB" data-tool="circle" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg><span>Circle</span></button>
+          <button class="btn toolB" data-tool="angle" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19L12 6l8 13"/><path d="M9.5 15a5 5 0 005 0"/></svg><span>Angle</span></button>
+          <button class="btn toolB" data-tool="edit" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l7 16 2-7 7-2z"/><path d="M13 13l6 6"/></svg><span>Select / Edit</span></button>
+          <button class="btn toolB" data-tool="pan" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V5a2 2 0 014 0v5"/><path d="M12 10V4a2 2 0 014 0v7"/><path d="M16 11V6a2 2 0 014 0v8"/><path d="M8 10a2 2 0 00-4 0v4c0 4 3 7 7 7h2c5 0 8-3 8-8v-2a2 2 0 00-4 0"/><path d="M4 13l-1-1a2 2 0 00-3 3l4 4"/></svg><span>Pan</span></button>
+          <button class="btn" id="undoB" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M5 12h8a6 6 0 016 6"/></svg><span>Undo</span></button>
+          <button class="btn" id="clearB" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span>Clear</span></button>
+          <input id="colorB" type="color" value="#00ff66" title="Drawing colour" aria-label="Drawing colour">
+        </div>
+        <div class="desktop-zoom-controls" id="desktopZoomControlsB">
+          <button id="zoomOutB" type="button" aria-label="Zoom out Video B" title="Zoom out"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></svg></button>
+          <span class="desktop-zoom-value" id="desktopZoomValueB">100%</span>
+          <button id="zoomInB" type="button" aria-label="Zoom in Video B" title="Zoom in"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6M10.5 7.5v6"/></svg></button>
+        </div>
+        <div class="video-controls-overlay" id="overlayControlsB">
+          <button id="overlayPlayB" type="button" aria-label="Play Video B" title="Play"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
+          <button id="muteB" type="button" aria-label="Mute Video B" title="Mute audio"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15 9a4 4 0 010 6M17.5 6.5a8 8 0 010 11"/></svg></button>
+          <button id="loopB" type="button" aria-label="Loop Video B" title="Loop video" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 013-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 01-3 3H3"/></svg></button>
+          <button id="focusB" type="button" aria-label="Expand Video B" title="Full screen" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>
+          <input id="seekB" type="range" min="0" max="100" step="0.01" value="0" aria-label="Video B timeline">
+          <span id="overlayTimeB" class="video-time">0:00 / 0:00</span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="range-row"><label>Speed</label><input id="speedB" type="range" min="0.1" max="4" step="0.05" value="1"><output id="speedBOut">1.00×</output></div>
+        <div class="range-row"><label>Offset</label><input id="offsetB" type="range" min="-5" max="5" step="0.04" value="0"><output id="offsetBOut">0.00 s</output></div>
+        <div class="row"><button class="btn icon-label" id="backB"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5v14"/><path d="M18 6l-8 6 8 6z"/></svg><span>1 frame</span></button><button class="btn icon-label" id="fwdB"><span>1 frame</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 5v14"/><path d="M6 6l8 6-8 6z"/></svg></button><span class="small" id="timeB">0.00 s</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <b>Current capability</b>
+    <div class="small" style="margin-top:6px">
+      Starts in one-video mode with a large analysis view. Video A can be loaded from a file or recorded directly from the device camera inside the app. Add a second video only when needed; comparison becomes side by side in landscape and stacked in portrait.
+      Drawing tools are tap-to-toggle (tap the active tool again to turn it off), touch-friendly, and all annotation types are editable: lines, rectangles, circles, angles and freehand marks can be selected and moved; shape handles resize or reshape them.
+      Play/pause, mute/unmute, looping, full-screen focus mode and a scrub timeline are overlaid across the bottom of each video. Full-screen focus keeps the drawing/edit Tools drawer and all playback controls available over the video. Player controls now use a consistent clean line-icon style. On touch devices, pinch with two fingers to zoom from 100% to 500%; moving the pinch midpoint pans around the enlarged video, and Reset zoom returns to 100%.
+      On desktop, selecting the synced Video Analysis folder keeps the existing direct SharePoint/OneDrive save workflow and creates a Mobile Uploads inbox. On iPad or phone, Portable Mode exports one session ZIP. Upload one or many ZIPs to Video Analysis → Mobile Uploads in OneDrive, then use Import Mobile Sessions on the desktop to file every session automatically into the correct player folders and App/Data. The startup window has three routes: Create New opens the camera, Load Video File opens existing footage, and Review Previous Analysis restores an old JSON together with its original video(s).
+    </div>
+  </div>
+</div>
+
+<dialog id="closeAppDialog">
+  <div class="modal">
+    <div class="topbar">
+      <div>
+        <h2 style="margin:0;font-size:20px">Close Video Analysis?</h2>
+        <div class="small">The app window can close, but the local server will still be running.</div>
+      </div>
+    </div>
+
+    <div class="status" style="margin-top:10px">
+      After closing this window, open the Video Analysis app folder and double-click
+      <b>Stop Video Analysis.cmd</b> to stop the local server.
+    </div>
+
+    <div class="small" style="margin-top:10px">
+      This version deliberately keeps the proven v21 Windows launcher/server unchanged.
+    </div>
+
+    <div class="actions" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn" id="cancelCloseAppBtn" type="button">Cancel</button>
+      <button class="btn primary" id="confirmCloseAppBtn" type="button">Close App Window</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="startupDialog">
+  <form id="startupForm" class="modal">
+    <div class="topbar">
+      <div>
+        <h2 style="margin:0;font-size:21px">Start video analysis</h2>
+        <div class="small">Choose the players first, then how you want to start.</div>
+      </div>
+      <button class="btn" id="closeStartupBtn" type="button">← Back to analyser</button>
+    </div>
+
+    <div class="status" id="startupFolderStatus">
+      First connect the main <b>Video Analysis</b> folder.
+    </div>
+    <div class="actions" style="margin-top:8px">
+      <button class="btn soft" id="startupConnectBtn" type="button">Select Video Analysis Folder</button>
+    </div>
+
+    <div id="startupAfterConnect" class="session-hidden">
+      <div class="session-section">
+        <label>Players involved</label>
+        <div id="startupPlayersList" class="players" style="margin-top:6px"></div>
+        <div id="portablePlayerTools" class="portable-tools">
+          <div class="roster-title-row">
+            <div>
+              <b>Player roster</b>
+              <div class="small" id="rosterSourceStatus">Loading player-lists.csv…</div>
+            </div>
+          </div>
+
+          <div class="roster-controls roster-controls-single">
+            <label>Find player
+              <input id="playerRosterSearch" type="text" placeholder="Search by first name or surname">
+            </label>
+          </div>
+
+          <div class="small roster-help">
+            Player names are loaded automatically from <b>player-lists.csv</b> and shown together in one list, alphabetically by surname.
+          </div>
+
+          <details class="temporary-player-panel">
+            <summary>Add new player</summary>
+            <div class="small warning-text">Use this when a genuine new player is not yet on the master roster. The name will be remembered on this device and shown in the main alphabetical player list next time. Add them to player-lists.csv later so every device uses the same spelling.</div>
+            <textarea id="portablePlayerNames" placeholder="Full player name"></textarea>
+            <div class="actions" style="margin-top:8px">
+              <button class="btn soft" id="addPortablePlayersBtn" type="button">Add new player</button>
+              <button class="btn" id="removePortablePlayersBtn" type="button">Remove selected local player</button>
+            </div>
+          </details>
+        </div>
+        <div class="small" style="margin-top:6px">For Review Previous Analysis, the JSON can also restore the original player details when they are present.</div>
+      </div>
+
+      <div class="session-section">
+        <label>How do you want to start?</label>
+        <div class="session-types" style="margin-top:6px">
+          <div class="session-type">
+            <input type="radio" name="startupMode" id="modeNew" value="new" checked>
+            <label for="modeNew"><b>📷 Create new</b><span class="small">Starts a new session and opens the camera ready to record Video A.</span></label>
+          </div>
+          <div class="session-type">
+            <input type="radio" name="startupMode" id="modeFile" value="file">
+            <label for="modeFile"><b>📁 Load video file</b><span class="small">Choose one existing video, or two videos for comparison.</span></label>
+          </div>
+          <div class="session-type">
+            <input type="radio" name="startupMode" id="modeReview" value="review">
+            <label for="modeReview"><b>↩ Review previous analysis</b><span class="small">Choose an old JSON analysis file and its original video(s) to restore the previous work.</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div id="startupDetailsSection" class="session-section">
+        <div class="meta-grid">
+          <label>Date *<input id="startupDate" type="date"></label>
+          <label>Category *
+            <select id="startupCategory">
+              <option value="">Select…</option>
+              <option>Batting</option><option>Bowling</option><option>Fielding</option>
+              <option>Wicketkeeping</option><option>Fitness</option><option>Other</option>
+            </select>
+          </label>
+          <label style="grid-column:1/-1">Description<input id="startupDesc" type="text" placeholder="e.g. Front foot technique"></label>
+        </div>
+      </div>
+
+      <div id="startupFileSection" class="session-section session-hidden">
+        <label>Video file(s) *</label>
+        <input id="startupVideoFiles" type="file" accept="video/*" multiple style="margin-top:6px">
+        <div class="small" style="margin-top:5px">Choose one video for normal analysis or two videos for comparison.</div>
+      </div>
+
+      <div id="startupReviewSection" class="session-section session-hidden">
+        <label>Previous analysis JSON *</label>
+        <input id="startupReviewJson" type="file" accept=".json,application/json" style="margin-top:6px">
+        <div style="height:8px"></div>
+        <label>Original video file(s) *</label>
+        <input id="startupReviewVideos" type="file" accept="video/*" multiple style="margin-top:6px">
+        <div class="small" style="margin-top:5px">Choose the video used for the analysis. If the JSON contains Video A and Video B, choose both files in A-then-B order.</div>
+      </div>
+
+      <div id="startupMsg" class="small" style="margin-top:12px"></div>
+
+      <div class="actions" style="justify-content:flex-end;margin-top:14px">
+        <button type="submit" class="btn primary" id="startSessionBtn">Create new</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="batchImportDialog">
+  <div class="modal">
+    <div class="topbar">
+      <div>
+        <h2 style="margin:0;font-size:20px">Import mobile sessions</h2>
+        <div class="small">Import several session ZIPs in one go and file everything into the correct SharePoint-synced folders.</div>
+      </div>
+      <button type="button" class="btn" id="closeBatchImport">✕</button>
+    </div>
+
+    <div class="status ok" id="batchImportStatus">
+      ZIPs created by the iPad/phone version contain the player names, date, category, description, videos, screenshots and analysis data. The app fills these details in automatically, but you can edit the players, date, category or description below before importing.
+    </div>
+
+    <div class="actions" style="margin-top:10px">
+      <button class="btn primary" id="scanMobileUploadsBtn" type="button">Scan Mobile Uploads</button>
+      <label class="btn soft">Choose ZIP files
+        <input id="batchZipPicker" type="file" accept=".zip,application/zip" multiple hidden>
+      </label>
+    </div>
+
+    <div class="small" style="margin-top:8px">
+      <b>Mobile Uploads</b> is created automatically inside the main Video Analysis folder. On your phone/iPad, upload one or many session ZIPs there using OneDrive.
+    </div>
+
+    <div id="batchImportList" class="batch-list"></div>
+    <div id="batchImportSummary" class="batch-summary">No ZIP sessions loaded yet.</div>
+    <div id="batchImportMsg" class="small" style="margin-top:8px"></div>
+
+    <div class="actions" style="justify-content:flex-end;margin-top:14px">
+      <button class="btn" id="clearBatchImport" type="button">Clear</button>
+      <button class="btn primary" id="confirmBatchImport" type="button" disabled>Import all valid sessions</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="exportReadyDialog">
+  <div class="modal">
+    <div class="topbar">
+      <div>
+        <h2 style="margin:0;font-size:20px">Session ready to save</h2>
+        <div class="small">Your analysis ZIP has been prepared.</div>
+      </div>
+      <button class="btn" id="closeExportReady" type="button">✕</button>
+    </div>
+
+    <div class="status ok" id="exportReadyStatus">
+      Tap <b>Share / Save ZIP</b>. On iPad choose <b>Save to Files</b>, <b>OneDrive</b>, AirDrop or another destination from the normal iOS share sheet.
+    </div>
+
+    <div id="exportReadyName" class="batch-summary" style="overflow-wrap:anywhere"></div>
+
+    <div class="actions" style="justify-content:flex-end;margin-top:14px">
+      <button class="btn soft" id="downloadExportBtn" type="button">Download ZIP</button>
+      <button class="btn primary" id="shareExportBtn" type="button">Share / Save ZIP</button>
+    </div>
+
+    <div id="exportReadyMsg" class="small" style="margin-top:8px"></div>
+  </div>
+</dialog>
+
+<dialog id="saveDialog">
+  <form id="saveForm" class="modal">
+    <div class="topbar">
+      <div><h2 style="margin:0;font-size:20px">Save analysis</h2><div class="small">Choose one or more players. Date and category are required.</div></div>
+      <button type="button" class="btn" id="closeDialog">✕</button>
+    </div>
+
+    <label>Players *</label>
+    <div id="playersList" class="players" style="margin-top:6px"></div>
+
+    <div class="meta-grid" style="margin-top:12px">
+      <label>Date *<input id="saveDate" type="date" required></label>
+      <label>Category *
+        <select id="saveCategory" required>
+          <option value="">Select…</option>
+          <option>Batting</option><option>Bowling</option><option>Fielding</option>
+          <option>Wicketkeeping</option><option>Fitness</option><option>Other</option>
+        </select>
+      </label>
+      <label style="grid-column:1/-1">Description<input id="saveDesc" type="text" placeholder="e.g. Front foot technique"></label>
+    </div>
+
+    <div class="sep"></div>
+    <div id="savePreview" class="preview">Complete the required fields to preview the folders.</div>
+    <div id="saveMsg" class="small" style="margin-top:8px"></div>
+
+    <div class="actions" style="justify-content:flex-end;margin-top:14px">
+      <button type="button" class="btn" id="cancelSave">Cancel</button>
+      <button type="submit" class="btn primary" id="confirmSave">Confirm save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="savedDialog">
+  <div class="modal">
+    <div class="topbar">
+      <div><h2 style="margin:0;font-size:20px">Open saved analysis</h2>
+        <div class="small">Sessions stored in App/Data. Opening one restores its saved annotations and playback settings.</div>
+      </div>
+      <button type="button" class="btn" id="closeSavedDialog">✕</button>
+    </div>
+    <div id="savedSessionsMsg" class="small" style="margin-bottom:10px"></div>
+    <div id="savedSessionsList" class="session-list"></div>
+  </div>
+</dialog>
+
+<dialog id="importDialog">
+  <form id="importForm" class="modal">
+    <div class="topbar">
+      <div><h2 style="margin:0;font-size:20px">Import old analysis</h2>
+        <div class="small">Use this for analysis files created before this app. They will be copied into the selected player session folder(s).</div>
+      </div>
+      <button type="button" class="btn" id="closeImportDialog">✕</button>
+    </div>
+
+    <label>Players *</label>
+    <div id="importPlayersList" class="players" style="margin-top:6px"></div>
+
+    <div class="meta-grid" style="margin-top:12px">
+      <label>Date *<input id="importDate" type="date" required></label>
+      <label>Category *
+        <select id="importCategory" required>
+          <option value="">Select…</option>
+          <option>Batting</option><option>Bowling</option><option>Fielding</option>
+          <option>Wicketkeeping</option><option>Fitness</option><option>Other</option>
+        </select>
+      </label>
+      <label style="grid-column:1/-1">Description<input id="importDesc" type="text" placeholder="e.g. Old coaching analysis"></label>
+      <label style="grid-column:1/-1">Existing analysis files *
+        <input id="importFiles" type="file" multiple accept="video/*,image/*,.json" required>
+      </label>
+    </div>
+
+    <div class="sep"></div>
+    <div id="importPreview" class="preview">Choose player(s), session details and the existing files you want to bring into the system.</div>
+    <div id="importMsg" class="small" style="margin-top:8px"></div>
+
+    <div class="actions" style="justify-content:flex-end;margin-top:14px">
+      <button type="button" class="btn" id="cancelImport">Cancel</button>
+      <button type="submit" class="btn primary" id="confirmImport">Import</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+let spacePanHeld=false;
+function updateSpacePanClasses(){
+  ['A','B'].forEach(letter=>{
+    const box=$('box'+letter);
+    if(!box)return;
+    box.classList.toggle('space-pan',spacePanHeld);
+  });
+}
+document.addEventListener('keydown',ev=>{
+  if(ev.code==='Space' && !ev.repeat){
+    const tag=(document.activeElement?.tagName||'').toLowerCase();
+    const typing=tag==='input'||tag==='textarea'||tag==='select'||document.activeElement?.isContentEditable;
+    if(typing)return;
+    spacePanHeld=true;
+    updateSpacePanClasses();
+    ev.preventDefault();
+  }
+});
+document.addEventListener('keyup',ev=>{
+  if(ev.code==='Space'){
+    spacePanHeld=false;
+    updateSpacePanClasses();
+    ev.preventDefault();
+  }
+});
+window.addEventListener('blur',()=>{
+  spacePanHeld=false;
+  updateSpacePanClasses();
+});
+
+function isAppleMobileDevice(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+function isStandaloneApp(){
+  return window.matchMedia?.('(display-mode: standalone)').matches ||
+         window.matchMedia?.('(display-mode: fullscreen)').matches ||
+         window.navigator.standalone===true;
+}
+function updateIosInstallHint(){
+  const hint=$('iosInstallHint');
+  if(!hint)return;
+  const dismissed=sessionStorage.getItem('hideIosInstallHint')==='1';
+  hint.classList.toggle('show',isAppleMobileDevice()&&!isStandaloneApp()&&!dismissed);
+}
+
+const ICON_PATHS={"play":"<path d=\"M8 5l11 7-11 7z\"/>","pause":"<path d=\"M9 5v14M15 5v14\"/>","volume":"<path d=\"M11 5L6 9H3v6h3l5 4z\"/><path d=\"M15 9a4 4 0 010 6M17.5 6.5a8 8 0 010 11\"/>","mute":"<path d=\"M11 5L6 9H3v6h3l5 4z\"/><path d=\"M16 9l5 5M21 9l-5 5\"/>","repeat":"<path d=\"M17 2l4 4-4 4\"/><path d=\"M3 11V9a3 3 0 013-3h15\"/><path d=\"M7 22l-4-4 4-4\"/><path d=\"M21 13v2a3 3 0 01-3 3H3\"/>","maximize":"<path d=\"M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5\"/>","minimize":"<path d=\"M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6\"/>"};
+function iconSvg(name){
+  return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]||''}</svg>`;
+}
+
+const state = {
+  root:null, playersDir:null, dataDir:null, mobileDir:null, players:[], portableMode:false,
+  playerRosters:{}, rosterSource:'', temporaryPlayers:[], startupPlayerSelection:new Set(),
+  batchSessions:[],
+  pendingExport:null,
+  dualMode:false,
+  overlayMode:false, overlayBlend:50, overlaySyncing:false,
+  overlayPanTarget:'A',
+  overlayShift:{A:{x:0,y:0},B:{x:0,y:0}},
+  overlayLayerDrag:null,
+  fileA:null, fileB:null, urlA:null, urlB:null,
+  cameraStream:null, mediaRecorder:null, recordedChunks:[], cameraActive:false,
+  sessionContext:{mode:'new',players:[],date:'',category:'',description:''},
+  startupSavedSelection:null,
+  loop:{A:false,B:false},
+  focus:null,
+  savedSessions:[],
+  screenshots:[],
+  draw:{
+    A:{tool:'free',items:[],working:null,anglePts:[],selected:-1,dragMode:null,dragPoint:-1,lastPointer:null,zoom:{scale:1,tx:0,ty:0,pointers:new Map(),pinching:false,startDist:0,startScale:1,anchorX:0,anchorY:0},panDragging:false,panStart:null,panOrigin:null},
+    B:{tool:'free',items:[],working:null,anglePts:[],selected:-1,dragMode:null,dragPoint:-1,lastPointer:null,zoom:{scale:1,tx:0,ty:0,pointers:new Map(),pinching:false,startDist:0,startScale:1,anchorX:0,anchorY:0},panDragging:false,panStart:null,panOrigin:null}
+  }
+};
+
+
+function overlayShiftFor(letter){
+  return state.overlayShift?.[letter] || {x:0,y:0};
+}
+function renderMediaTransform(letter){
+  const z=state.draw[letter].zoom;
+  const shift=state.overlayMode?overlayShiftFor(letter):{x:0,y:0};
+  const media=$('mediaLayer'+letter);
+  if(media) media.style.transform=`translate(${z.tx+shift.x}px,${z.ty+shift.y}px) scale(${z.scale})`;
+}
+function overlayBoxSize(){
+  const box=$('boxA');
+  return {w:Math.max(1,box?.clientWidth||1),h:Math.max(1,box?.clientHeight||1)};
+}
+function clampOverlayZoom(letter){
+  const z=state.draw[letter].zoom;
+  const {w,h}=overlayBoxSize();
+  const minX=w-w*z.scale, minY=h-h*z.scale;
+  z.tx=Math.max(minX,Math.min(0,z.tx));
+  z.ty=Math.max(minY,Math.min(0,z.ty));
+}
+function refreshZoomReadouts(letter){
+  const pct=Math.round((state.draw[letter]?.zoom?.scale||1)*100)+'%';
+  if($('zoom'+letter+'Out'))$('zoom'+letter+'Out').textContent=pct;
+  if($('desktopZoomValue'+letter))$('desktopZoomValue'+letter).textContent=pct;
+  if(state.overlayMode)updateOverlayActiveLayerUI();
+}
+function zoomOverlayLayerAt(letter,newScale,clientX,clientY){
+  const z=state.draw[letter].zoom;
+  const oldScale=z.scale;
+  newScale=Math.max(1,Math.min(5,newScale));
+  if(Math.abs(newScale-oldScale)<0.0001)return;
+
+  const r=$('boxA').getBoundingClientRect();
+  const shift=overlayShiftFor(letter);
+  const anchorX=(clientX-r.left-z.tx-shift.x)/oldScale;
+  const anchorY=(clientY-r.top-z.ty-shift.y)/oldScale;
+
+  z.scale=newScale;
+  z.tx=(clientX-r.left-shift.x)-anchorX*newScale;
+  z.ty=(clientY-r.top-shift.y)-anchorY*newScale;
+
+  clampOverlayZoom(letter);
+  renderMediaTransform(letter);
+  refreshZoomReadouts(letter);
+}
+function zoomOverlayActiveAt(newScale,clientX,clientY){
+  const letter=state.overlayPanTarget==='B'?'B':'A';
+  zoomOverlayLayerAt(letter,newScale,clientX,clientY);
+}
+function zoomOverlayActiveCentre(newScale){
+  const r=$('boxA').getBoundingClientRect();
+  zoomOverlayActiveAt(newScale,r.left+r.width/2,r.top+r.height/2);
+}
+function resetOverlayActiveZoom(){
+  const letter=state.overlayPanTarget==='B'?'B':'A';
+  const z=state.draw[letter].zoom;
+  z.scale=1;
+  z.tx=0;
+  z.ty=0;
+  z.pointers?.clear?.();
+  z.pinching=false;
+  renderMediaTransform(letter);
+  refreshZoomReadouts(letter);
+}
+
+function updateOverlayActiveLayerUI(){
+  const active=state.overlayPanTarget==='B'?'B':'A';
+  ['A','B'].forEach(L=>{
+    const btn=$('panLayer'+L);
+    if(!btn)return;
+    const isActive=L===active;
+    btn.classList.toggle('active',isActive);
+    btn.setAttribute('aria-pressed',String(isActive));
+  });
+  const zoom=Math.round((state.draw[active]?.zoom?.scale||1)*100);
+  if($('overlayAlignStatus'))$('overlayAlignStatus').textContent=`Video ${active} · ${zoom}% · pan + zoom`;
+  if($('desktopZoomValueA'))$('desktopZoomValueA').textContent=zoom+'%';
+  const box=$('boxA');
+  if(box){
+    box.classList.toggle('overlay-moving-a',state.overlayMode&&active==='A');
+    box.classList.toggle('overlay-moving-b',state.overlayMode&&active==='B');
+  }
+}
+function setOverlayPanTarget(letter){
+  state.overlayPanTarget=letter==='B'?'B':'A';
+  updateOverlayActiveLayerUI();
+}
+function resetOverlayAlignment(){
+  state.overlayShift.A={x:0,y:0};
+  state.overlayShift.B={x:0,y:0};
+  renderMediaTransform('A');
+  renderMediaTransform('B');
+  updateOverlayActiveLayerUI();
+}
+function beginOverlayLayerPan(ev,canvas){
+  if(!state.overlayMode)return false;
+  const target=state.overlayPanTarget==='B'?'B':'A';
+  const shift=overlayShiftFor(target);
+  state.overlayLayerDrag={
+    target,
+    startX:ev.clientX,
+    startY:ev.clientY,
+    originX:shift.x,
+    originY:shift.y,
+    pointerId:ev.pointerId
+  };
+  $('boxA')?.classList.add('overlay-layer-dragging');
+  try{canvas.setPointerCapture(ev.pointerId)}catch{}
+  ev.preventDefault();
+  return true;
+}
+function moveOverlayLayerPan(ev){
+  const drag=state.overlayLayerDrag;
+  if(!drag)return false;
+  const target=drag.target;
+  state.overlayShift[target].x=drag.originX+(ev.clientX-drag.startX);
+  state.overlayShift[target].y=drag.originY+(ev.clientY-drag.startY);
+  renderMediaTransform(target);
+  updateOverlayActiveLayerUI();
+  ev.preventDefault();
+  return true;
+}
+function endOverlayLayerPan(ev,canvas){
+  if(!state.overlayLayerDrag)return false;
+  state.overlayLayerDrag=null;
+  $('boxA')?.classList.remove('overlay-layer-dragging');
+  try{canvas.releasePointerCapture(ev.pointerId)}catch{}
+  ev.preventDefault();
+  return true;
+}
+
+function safeName(s){
+  return String(s||'').trim().replace(/[<>:"/\\|?*\x00-\x1F]/g,'-').replace(/\s+/g,' ').replace(/[. ]+$/,'') || 'Untitled';
+}
+function slug(s){ return safeName(s).replace(/\s+/g,'-'); }
+function surnameSortKey(name){
+  const cleaned=String(name||'').trim().replace(/\s+/g,' ');
+  const parts=cleaned.split(' ').filter(Boolean);
+  const surname=(parts.pop()||'').toLowerCase();
+  const given=parts.join(' ').toLowerCase();
+  return {surname,given,full:cleaned.toLowerCase()};
+}
+function sortPlayersBySurname(names){
+  return [...names].sort((a,b)=>{
+    const A=surnameSortKey(a),B=surnameSortKey(b);
+    return A.surname.localeCompare(B.surname) ||
+           A.given.localeCompare(B.given) ||
+           A.full.localeCompare(B.full);
+  });
+}
+function extOf(file){ const m=(file?.name||'').match(/(\.[a-zA-Z0-9]+)$/); return m?m[1]:'.mp4'; }
+function setStatus(msg,kind=''){
+  const el=$('rootStatus'); el.className='status'+(kind?' '+kind:''); el.innerHTML=msg;
+}
+function todayLocal(){
+  const d=new Date(), y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+$('saveDate').value=todayLocal();
+
+const TEMP_PLAYERS_KEY='videoAnalysisPlayers';
+
+function loadPortablePlayers(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem(TEMP_PLAYERS_KEY)||'[]');
+    return Array.isArray(parsed)?parsed.filter(Boolean).map(String):[];
+  }catch{return []}
+}
+function savePortablePlayers(){
+  localStorage.setItem(TEMP_PLAYERS_KEY,JSON.stringify(state.temporaryPlayers||[]));
+}
+
+function parseCsvRows(text){
+  const rows=[];
+  let row=[],field='',quoted=false;
+  const s=String(text||'').replace(/^\uFEFF/,'');
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    if(quoted){
+      if(ch==='"' && s[i+1]==='"'){field+='"';i++;}
+      else if(ch==='"'){quoted=false;}
+      else field+=ch;
+    }else{
+      if(ch==='"')quoted=true;
+      else if(ch===','){row.push(field);field='';}
+      else if(ch==='\n'){row.push(field);rows.push(row);row=[];field='';}
+      else if(ch!=='\r')field+=ch;
+    }
+  }
+  row.push(field);
+  if(row.some(x=>String(x).trim()))rows.push(row);
+  return rows;
+}
+
+function rosterFromCsv(text){
+  const rows=parseCsvRows(text);
+  if(!rows.length)return {};
+  const header=rows[0].map(x=>String(x).trim().toLowerCase());
+  const listIndex=header.findIndex(x=>['list','group','squad','year group','yeargroup'].includes(x));
+  const playerIndex=header.findIndex(x=>['player','player name','name','playername'].includes(x));
+  if(playerIndex<0){
+    throw new Error('Roster CSV needs a Player or Name column.');
+  }
+
+  const rosters={};
+  for(const row of rows.slice(1)){
+    const player=String(row[playerIndex]??'').trim();
+    const list=listIndex>=0?String(row[listIndex]??'').trim():'All players';
+    if(!player || player.startsWith('#'))continue;
+    const group=(!list || list.startsWith('#'))?'All players':list;
+    if(!rosters[group])rosters[group]=[];
+    if(!rosters[group].some(x=>x.toLowerCase()===player.toLowerCase()))rosters[group].push(player);
+  }
+  for(const list of Object.keys(rosters))rosters[list]=sortPlayersBySurname(rosters[list]);
+  return rosters;
+}
+
+function allRosterPlayers(){
+  const out=[];
+  const seen=new Set();
+  for(const names of Object.values(state.playerRosters||{})){
+    for(const name of names){
+      const key=name.toLowerCase();
+      if(!seen.has(key)){seen.add(key);out.push(name);}
+    }
+  }
+  return sortPlayersBySurname(out);
+}
+
+function rebuildPortablePlayers(){
+  if(!state.portableMode)return;
+  const master=allRosterPlayers();
+  const merged=[];
+  const seen=new Set();
+  for(const name of [...master,...state.temporaryPlayers]){
+    const key=String(name).toLowerCase();
+    if(!seen.has(key)){seen.add(key);merged.push(name);}
+  }
+  state.players=sortPlayersBySurname(merged);
+}
+
+function renderRosterSelect(){
+  // v36 intentionally shows one complete player list rather than grouped views.
+  updateRosterStatus();
+}
+
+function updateRosterStatus(){
+  const el=$('rosterSourceStatus');
+  if(!el)return;
+  const players=allRosterPlayers().length;
+  if(players){
+    el.className='small';
+    el.innerHTML=`Loaded from <b>player-lists.csv</b> · <b>${players}</b> player${players===1?'':'s'} · sorted by surname`;
+  }else{
+    el.className='small roster-zero-warning';
+    el.innerHTML='<b>player-lists.csv loaded but contains 0 players.</b> Add real names to the CSV in GitHub, then reopen the app.';
+  }
+}
+
+async function loadBundledRoster(){
+  try{
+    // Timestamp query avoids a stale roster from an older installed PWA
+    // service worker. GitHub Pages will return the latest CSV.
+    const url='./player-lists.csv?roster='+Date.now();
+    const res=await fetch(url,{cache:'no-store'});
+    if(!res.ok)throw new Error('player-lists.csv was not found');
+    const text=await res.text();
+    const rosters=rosterFromCsv(text);
+    state.playerRosters=rosters;
+    state.rosterSource='player-lists.csv';
+
+    const count=allRosterPlayers().length;
+    if(!count){
+      state.rosterSource='player-lists.csv loaded but contains 0 players';
+    }
+    return true;
+  }catch(err){
+    state.playerRosters={};
+    state.rosterSource='Roster unavailable';
+    return false;
+  }
+}
+
+async function initializePlayerRosters(){
+  state.temporaryPlayers=loadPortablePlayers();
+  await loadBundledRoster();
+  renderRosterSelect();
+  updateRosterStatus();
+}
+
+
+
+function canonicalMasterName(raw){
+  const name=String(raw||'').trim();
+  const lower=name.toLowerCase();
+  return allRosterPlayers().find(x=>x.toLowerCase()===lower)||name;
+}
+
+function addPortablePlayersFromText(){
+  const names=$('portablePlayerNames').value
+    .split(/\r?\n/)
+    .map(x=>x.trim())
+    .filter(Boolean)
+    .map(canonicalMasterName);
+
+  if(!names.length)return;
+
+  const masterLower=new Set(allRosterPlayers().map(x=>x.toLowerCase()));
+  const additions=names.filter(n=>!masterLower.has(n.toLowerCase()));
+
+  for(const name of additions){
+    if(!state.temporaryPlayers.some(x=>x.toLowerCase()===name.toLowerCase())){
+      state.temporaryPlayers.push(name);
+    }
+  }
+  state.temporaryPlayers.sort((a,b)=>a.localeCompare(b));
+  savePortablePlayers();
+  rebuildPortablePlayers();
+  renderRosterSelect();
+    $('portablePlayerNames').value='';
+  renderStartupPlayers();
+  renderPlayers();
+  updateRosterStatus();
+}
+
+function removeSelectedPortablePlayers(){
+  const removeLower=new Set(
+    selectedStartupPlayers()
+      .filter(n=>state.temporaryPlayers.some(t=>t.toLowerCase()===n.toLowerCase()))
+      .map(n=>n.toLowerCase())
+  );
+  if(!removeLower.size)return;
+  state.temporaryPlayers=state.temporaryPlayers.filter(n=>!removeLower.has(n.toLowerCase()));
+  for(const name of [...state.startupPlayerSelection]){
+    if(removeLower.has(name.toLowerCase()))state.startupPlayerSelection.delete(name);
+  }
+  state.sessionContext.players=state.sessionContext.players.filter(n=>!removeLower.has(n.toLowerCase()));
+  savePortablePlayers();
+  rebuildPortablePlayers();
+  renderRosterSelect();
+  renderStartupPlayers();
+  renderPlayers();
+  updateRosterStatus();
+}
+
+$('addPortablePlayersBtn').addEventListener('click',addPortablePlayersFromText);
+$('removePortablePlayersBtn').addEventListener('click',removeSelectedPortablePlayers);
+$('playerRosterSearch').addEventListener('input',renderStartupPlayers);
+
+function enterPortableMode(){
+  state.portableMode=true;
+  rebuildPortablePlayers();
+  $('modePill').textContent='iPad / portable mode';
+  $('selectRootBtn').style.display='none';
+  $('batchImportBtn').style.display='none';
+  $('startupConnectBtn').style.display='none';
+  $('portablePlayerTools').classList.add('active');
+  $('startupAfterConnect').classList.remove('session-hidden');
+  $('startupFolderStatus').className='status ok';
+  $('startupFolderStatus').innerHTML='<b>Portable mode.</b> Choose players from the roster loaded from player-lists.csv below. Saving prepares one session ZIP, then opens the iPad Share sheet so you can choose Files or OneDrive.';
+  $('saveBtn').disabled=false;
+  renderStartupPlayers();
+  renderPlayers();
+  setStatus('<b>Portable mode:</b> analysis runs locally on this device. Save Analysis prepares one ZIP, then Share / Save ZIP opens the native iPad share sheet. Your videos are not uploaded to the website.','ok');
+}
+
+function enterDesktopMode(){
+  state.portableMode=false;
+  $('modePill').textContent='Desktop folder mode';
+  $('selectRootBtn').style.display='';
+  $('batchImportBtn').style.display='';
+  $('portablePlayerTools').classList.remove('active');
+}
+
+function updateCloseAppVisibility(){
+  const isLocal = location.protocol==='http:' &&
+    (location.hostname==='localhost' || location.hostname==='127.0.0.1');
+  $('closeAppBtn').style.display=isLocal?'':'none';
+}
+$('closeAppBtn').addEventListener('click',()=>{
+  if(!$('closeAppDialog').open)$('closeAppDialog').showModal();
+});
+$('cancelCloseAppBtn').addEventListener('click',()=>{
+  if($('closeAppDialog').open)$('closeAppDialog').close();
+});
+$('confirmCloseAppBtn').addEventListener('click',()=>{
+  if($('closeAppDialog').open)$('closeAppDialog').close();
+  try{window.close()}catch{}
+  setTimeout(()=>{
+    document.body.innerHTML=`
+      <div style="min-height:100vh;display:grid;place-items:center;background:#f5f7fb;font-family:Segoe UI,Arial,sans-serif;padding:24px">
+        <div style="max-width:560px;background:white;border:1px solid #dce2ea;border-radius:16px;padding:28px;text-align:center;box-shadow:0 10px 35px rgba(0,0,0,.08)">
+          <h2 style="margin:0 0 10px">Video Analysis window closed</h2>
+          <p style="margin:0 0 10px;color:#667085">If this window has not closed automatically, you can close it now.</p>
+          <p style="margin:0;color:#667085">Then run <b>Stop Video Analysis.cmd</b> from the app folder to stop the local server.</p>
+        </div>
+      </div>`;
+  },300);
+});
+updateCloseAppVisibility();
+
+
+
+
+function updateOverlayAvailability(){
+  const ready=Boolean(state.dualMode && state.fileA && state.fileB);
+  $('overlayModeBtn').disabled=!ready;
+  if(!ready && state.overlayMode)setOverlayMode(false);
+}
+
+function applyOverlayBlend(){
+  const blend=Math.max(0,Math.min(100,Number($('overlayBlend').value)||0));
+  state.overlayBlend=blend;
+
+  // B stays as the fully opaque base layer. A is faded over it.
+  // This produces the effective mix B=(100-blend)% and A=blend%.
+  $('videoB').style.opacity='1';
+  $('videoA').style.opacity=state.overlayMode?String(blend/100):'1';
+
+  $('overlayBlendOut').textContent=`B ${100-Math.round(blend)}% · A ${Math.round(blend)}%`;
+}
+
+function syncOverlayViewFromA(){
+  // v34 keeps both overlay layers independent.
+  renderMediaTransform('A');
+  renderMediaTransform('B');
+  refreshZoomReadouts('A');
+  refreshZoomReadouts('B');
+}
+
+function setOverlayMode(on){
+  on=Boolean(on && state.dualMode && state.fileA && state.fileB);
+
+  if(state.focus){
+    setVideoFocus(state.focus,false);
+  }
+
+  state.overlayMode=on;
+  $('videoGrid').classList.toggle('overlay-mode',on);
+  $('overlayModeBtn').classList.toggle('soft',on);
+  $('overlayModeBtn').setAttribute('aria-pressed',String(on));
+  $('overlayModeBtn').querySelector('span').textContent=on?'Side-by-side view':'Overlay videos';
+
+  if(on){
+    renderMediaTransform('A');
+    renderMediaTransform('B');
+    refreshZoomReadouts('A');
+    refreshZoomReadouts('B');
+    applyOverlayBlend();
+    setOverlayPanTarget(state.overlayPanTarget||'A');
+    $('layoutHint').textContent='Overlay mode: choose Active layer A or B. Pan, Spacebar-drag, mouse-wheel zoom, +/- zoom and Reset Zoom affect only that selected video.';
+  }else{
+    $('videoA').style.opacity='1';
+    $('videoB').style.opacity='1';
+    $('boxA').classList.remove('overlay-moving-a','overlay-moving-b','overlay-layer-dragging');
+    renderMediaTransform('A');
+    renderMediaTransform('B');
+    $('videoGrid').classList.remove('overlay-focus-fullscreen');
+    if(state.dualMode){
+      $('layoutHint').textContent='Comparison mode: side by side in landscape; stacked in portrait.';
+    }
+  }
+
+  setTimeout(()=>{canvA?.redraw?.();canvB?.redraw?.();},50);
+}
+
+$('overlayModeBtn').addEventListener('click',()=>setOverlayMode(!state.overlayMode));
+$('overlayBlend').addEventListener('input',applyOverlayBlend);
+$('panLayerA').addEventListener('click',ev=>{ev.stopPropagation();setOverlayPanTarget('A')});
+$('panLayerB').addEventListener('click',ev=>{ev.stopPropagation();setOverlayPanTarget('B')});
+$('resetOverlayAlignment').addEventListener('click',ev=>{ev.stopPropagation();resetOverlayAlignment()});
+applyOverlayBlend();
+setOverlayPanTarget('A');
+
+function setDualMode(on){
+  const next=Boolean(on);
+  if(!next && state.overlayMode)setOverlayMode(false);
+  state.dualMode=next;
+  $('videoGrid').classList.toggle('dual-mode',state.dualMode);
+  $('panelB').classList.toggle('video-panel-hidden',!state.dualMode);
+  $('compareControls').classList.toggle('active',state.dualMode);
+  $('addSecondBtn').style.display=state.dualMode?'none':'inline-block';
+  $('titleA').textContent=state.dualMode?'Video A':'Video';
+  if(!state.overlayMode){
+    $('layoutHint').textContent=state.dualMode
+      ? 'Comparison mode: side by side in landscape; stacked in portrait.'
+      : 'Single-video analysis mode. Add a second video only when you want comparison.';
+  }
+  updateOverlayAvailability();
+  setTimeout(()=>{canvA?.redraw?.();canvB?.redraw?.();},50);
+}
+$('addSecondBtn').addEventListener('click',()=>{
+  setDualMode(true);
+  $('fileB').click();
+});
+$('removeSecondBtn').addEventListener('click',()=>{
+  if(state.overlayMode)setOverlayMode(false);
+  $('videoB').pause();
+  if(state.urlB)URL.revokeObjectURL(state.urlB);
+  if(state.focus==='B')setVideoFocus('B',false);
+  state.urlB=null;state.fileB=null;setLoop('B',false);$('videoB').removeAttribute('src');$('videoB').load();
+  $('nameB').textContent='No video loaded';
+  state.draw.B.items=[];state.draw.B.anglePts=[];state.draw.B.selected=-1;
+  state.screenshots=state.screenshots.filter(s=>s.letter!=='B');
+  if(typeof setDrawerB==='function') setDrawerB(false);
+  setDualMode(false);
+});
+setDualMode(false);
+
+
+async function pickRoot(){
+  if(!('showDirectoryPicker' in window)){
+    enterPortableMode();
+    return;
+  }
+  try{
+    const root=await window.showDirectoryPicker({mode:'readwrite'});
+    let playersDir;
+    try{ playersDir=await root.getDirectoryHandle('Players'); }
+    catch{ throw new Error('No Players folder was found inside the selected folder. Select the main Video Analysis folder.'); }
+    const appDir=await root.getDirectoryHandle('App',{create:true});
+    const dataDir=await appDir.getDirectoryHandle('Data',{create:true});
+    const mobileDir=await root.getDirectoryHandle('Mobile Uploads',{create:true});
+    await mobileDir.getDirectoryHandle('Imported',{create:true});
+    const names=[];
+    for await (const [name,handle] of playersDir.entries()){
+      if(handle.kind==='directory') names.push(name);
+    }
+    names.splice(0,names.length,...sortPlayersBySurname(names));
+    state.root=root; state.playersDir=playersDir; state.dataDir=dataDir; state.mobileDir=mobileDir; state.players=names;
+    enterDesktopMode();
+    setStatus(`Connected to <b>${safeName(root.name)}</b>. Found <b>${names.length}</b> player folder${names.length===1?'':'s'}. App metadata will be stored privately in <b>App/Data</b>.`,'ok');
+    $('saveBtn').disabled=false;
+    $('openSavedBtn').disabled=false;
+    $('importOldBtn').disabled=false;
+    $('batchImportBtn').disabled=false;
+    renderPlayers();
+    renderStartupPlayers();
+    $('startupAfterConnect').classList.remove('session-hidden');
+    $('startupFolderStatus').className='status ok';
+    $('startupFolderStatus').innerHTML=`Connected to <b>${safeName(root.name)}</b>. Found <b>${names.length}</b> player folder${names.length===1?'':'s'}.`;
+  }catch(err){
+    if(err?.name!=='AbortError') setStatus(safeName(err.message||'Folder selection failed.'),'err');
+  }
+}
+$('selectRootBtn').addEventListener('click',pickRoot);
+$('startupConnectBtn').addEventListener('click',pickRoot);
+$('sessionSetupBtn').addEventListener('click',()=>{
+  if(state.root){
+    renderStartupPlayers();
+    $('startupAfterConnect').classList.remove('session-hidden');
+    $('startupFolderStatus').className='status ok';
+    $('startupFolderStatus').innerHTML=`Connected to <b>${safeName(state.root.name)}</b>. Found <b>${state.players.length}</b> player folder${state.players.length===1?'':'s'}.`;
+  }else if(state.portableMode){
+    renderStartupPlayers();
+    $('startupAfterConnect').classList.remove('session-hidden');
+    $('startupFolderStatus').className='status ok';
+    $('startupFolderStatus').innerHTML='<b>Portable mode.</b> Choose players from the master roster. New players can be added locally when genuinely needed.';
+  }
+  applySessionContextToStartup();
+  if(!$('startupDialog').open) $('startupDialog').showModal();
+});
+$('closeStartupBtn').addEventListener('click',()=>{
+  $('startupMsg').textContent='';
+  if($('startupDialog').open) $('startupDialog').close();
+});
+
+function startupRosterNames(){
+  let names=state.portableMode?allRosterPlayers():[...state.players];
+
+  if(state.portableMode){
+    for(const name of state.temporaryPlayers){
+      if(!names.some(x=>x.toLowerCase()===name.toLowerCase()))names.push(name);
+    }
+    for(const name of state.startupPlayerSelection){
+      if(!names.some(x=>x.toLowerCase()===name.toLowerCase()))names.push(name);
+    }
+  }
+
+  const q=($('playerRosterSearch')?.value||'').trim().toLowerCase();
+  if(q)names=names.filter(n=>n.toLowerCase().includes(q));
+  return sortPlayersBySurname([...new Set(names)]);
+}
+
+function renderStartupPlayers(){
+  const box=$('startupPlayersList');
+  if(!box) return;
+
+  // Capture any currently visible selections before replacing the list.
+  document.querySelectorAll('.startupPlayerCheck').forEach(cb=>{
+    if(cb.checked)state.startupPlayerSelection.add(cb.value);
+    else state.startupPlayerSelection.delete(cb.value);
+  });
+
+  box.innerHTML='';
+  const names=startupRosterNames();
+  if(!names.length){
+    const empty=document.createElement('div');
+    empty.className='player-list-empty';
+    empty.textContent=state.portableMode
+      ? 'No matching players found. Clear the search or import/update player-lists.csv.'
+      : 'No player folders found.';
+    box.append(empty);
+    return;
+  }
+
+  for(const name of names){
+    const lab=document.createElement('label');lab.className='player';
+    const cb=document.createElement('input');cb.type='checkbox';cb.value=name;cb.className='startupPlayerCheck';
+    cb.checked=state.startupPlayerSelection.has(name);
+    cb.addEventListener('change',()=>{
+      if(cb.checked)state.startupPlayerSelection.add(name);
+      else state.startupPlayerSelection.delete(name);
+    });
+    const span=document.createElement('span');span.textContent=name;
+    lab.append(cb,span);
+    if(state.portableMode && state.temporaryPlayers.some(t=>t.toLowerCase()===name.toLowerCase())){
+      const badge=document.createElement('span');
+      badge.className='local-player-badge';
+      badge.textContent='Added locally';
+      badge.title='This player is saved on this device but is not yet in player-lists.csv';
+      lab.append(badge);
+    }
+    box.append(lab);
+  }
+}
+function selectedStartupPlayers(){
+  // Capture the current visible state before returning the persistent set.
+  document.querySelectorAll('.startupPlayerCheck').forEach(cb=>{
+    if(cb.checked)state.startupPlayerSelection.add(cb.value);
+    else state.startupPlayerSelection.delete(cb.value);
+  });
+  return [...state.startupPlayerSelection];
+}
+function setStartupPlayers(names){
+  state.startupPlayerSelection=new Set((names||[]).map(String));
+  renderStartupPlayers();
+}
+function startupMode(){
+  return document.querySelector('input[name="startupMode"]:checked')?.value||'new';
+}
+function setStartupMode(mode){
+  const radio=document.querySelector(`input[name="startupMode"][value="${mode}"]`);
+  if(radio) radio.checked=true;
+  updateStartupModeUI();
+}
+function updateStartupModeUI(){
+  const mode=startupMode();
+  $('startupFileSection').classList.toggle('session-hidden',mode!=='file');
+  $('startupReviewSection').classList.toggle('session-hidden',mode!=='review');
+  $('startSessionBtn').textContent=mode==='new'?'Open camera':mode==='file'?'Load video':'Review analysis';
+  $('startupMsg').textContent='';
+}
+document.querySelectorAll('input[name="startupMode"]').forEach(r=>r.addEventListener('change',updateStartupModeUI));
+
+function applySessionContextToStartup(){
+  $('startupDate').value=state.sessionContext.date||todayLocal();
+  $('startupCategory').value=state.sessionContext.category||'';
+  $('startupDesc').value=state.sessionContext.description||'';
+  state.startupPlayerSelection=new Set(state.sessionContext.players||[]);
+  setStartupMode(['new','file','review'].includes(state.sessionContext.mode)?state.sessionContext.mode:'new');
+  renderStartupPlayers();
+}
+function applyStartupContext(mode,players,date,category,description){
+  state.sessionContext={
+    mode,
+    players:[...players],
+    date:date||'',
+    category:category||'',
+    description:description||''
+  };
+  $('saveDate').value=date||todayLocal();
+  $('saveCategory').value=category||'';
+  $('saveDesc').value=description||'';
+}
+function resetLoadedVideos(){
+  resetAnalysisState();
+  if(state.urlA){URL.revokeObjectURL(state.urlA);state.urlA=null}
+  if(state.urlB){URL.revokeObjectURL(state.urlB);state.urlB=null}
+  state.fileA=null;state.fileB=null;
+  for(const L of ['A','B']){
+    const v=$('video'+L);v.pause();v.removeAttribute('src');v.srcObject=null;v.load();
+    $('name'+L).textContent='No video loaded';
+  }
+  setDualMode(false);
+}
+function waitForMetadata(video){
+  if(video.readyState>=1) return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    const done=()=>{cleanup();resolve()};
+    const fail=()=>{cleanup();reject(new Error('Video metadata could not be loaded.'))};
+    const cleanup=()=>{video.removeEventListener('loadedmetadata',done);video.removeEventListener('error',fail)};
+    video.addEventListener('loadedmetadata',done,{once:true});
+    video.addEventListener('error',fail,{once:true});
+  });
+}
+async function loadSelectedVideos(files){
+  const vids=[...files].filter(f=>f.type.startsWith('video/')).slice(0,2);
+  if(!vids.length) throw new Error('Choose at least one video file.');
+  loadVideo('A',vids[0]);
+  if(vids[1]){setDualMode(true);loadVideo('B',vids[1])}else setDualMode(false);
+  await Promise.all([waitForMetadata($('videoA')), vids[1]?waitForMetadata($('videoB')):Promise.resolve()]);
+  return vids;
+}
+function validAnalysisJson(meta){
+  return meta && typeof meta==='object' && meta.annotations && (meta.videoA || meta.videoB || meta.version);
+}
+async function restoreReviewFromFiles(jsonFile,videoFiles,fallbackPlayers,fallbackDate,fallbackCategory,fallbackDescription){
+  const text=await jsonFile.text();
+  let meta;
+  try{meta=JSON.parse(text)}catch{throw new Error('The selected JSON file could not be read.')}
+  if(!validAnalysisJson(meta)) throw new Error('That JSON file does not look like a Video Analysis session file.');
+
+  resetLoadedVideos();
+  await loadSelectedVideos(videoFiles);
+
+  const players=(Array.isArray(meta.players)&&meta.players.length)?meta.players:fallbackPlayers;
+  const date=meta.date||fallbackDate||todayLocal();
+  const category=meta.category||fallbackCategory||'';
+  const description=meta.description||fallbackDescription||'';
+  applyStartupContext('review',players,date,category,description);
+
+  state.draw.A.items=JSON.parse(JSON.stringify(meta.annotations?.A||[]));
+  state.draw.B.items=JSON.parse(JSON.stringify(meta.annotations?.B||[]));
+  state.draw.A.anglePts=[];state.draw.B.anglePts=[];
+  state.draw.A.selected=-1;state.draw.B.selected=-1;
+  canvA.redraw();canvB.redraw();
+
+  if(meta.videoA){
+    $('speedA').value=String(meta.videoA.speed??1);
+    $('offsetA').value=String(meta.videoA.offset??0);
+    $('videoA').playbackRate=Number($('speedA').value);
+    $('videoA').currentTime=clampTime($('videoA'),Number(meta.videoA.currentTime||0));
+  }
+  if(meta.videoB && state.fileB){
+    $('speedB').value=String(meta.videoB.speed??1);
+    $('offsetB').value=String(meta.videoB.offset??0);
+    $('videoB').playbackRate=Number($('speedB').value);
+    $('videoB').currentTime=clampTime($('videoB'),Number(meta.videoB.currentTime||0));
+  }
+  $('linkPlayback').checked=Boolean(meta.linked);
+  if(meta.overlay){
+    $('overlayBlend').value=String(meta.overlay.blend ?? meta.overlay.opacityA ?? 50);
+    state.overlayShift.A={
+      x:Number(meta.overlay.shiftA?.x)||0,
+      y:Number(meta.overlay.shiftA?.y)||0
+    };
+    state.overlayShift.B={
+      x:Number(meta.overlay.shiftB?.x)||0,
+      y:Number(meta.overlay.shiftB?.y)||0
+    };
+    if(meta.overlay.zoomA){
+      state.draw.A.zoom.scale=Math.max(1,Math.min(5,Number(meta.overlay.zoomA.scale)||1));
+      state.draw.A.zoom.tx=Number(meta.overlay.zoomA.tx)||0;
+      state.draw.A.zoom.ty=Number(meta.overlay.zoomA.ty)||0;
+    }
+    if(meta.overlay.zoomB){
+      state.draw.B.zoom.scale=Math.max(1,Math.min(5,Number(meta.overlay.zoomB.scale)||1));
+      state.draw.B.zoom.tx=Number(meta.overlay.zoomB.tx)||0;
+      state.draw.B.zoom.ty=Number(meta.overlay.zoomB.ty)||0;
+    }
+    setOverlayPanTarget(meta.overlay.panTarget||'A');
+    applyOverlayBlend();
+    if(meta.overlay.enabled && state.fileA && state.fileB)setOverlayMode(true);
+  }
+  setSpeeds('A');updateOffsets();updatePlayButtons();
+  setStartupPlayers(players);
+  return meta;
+}
+
+$('startupReviewJson').addEventListener('change',async ev=>{
+  const file=ev.target.files[0];
+  if(!file) return;
+  try{
+    const meta=JSON.parse(await file.text());
+    if(!validAnalysisJson(meta)) throw new Error('Not a recognised Video Analysis JSON file.');
+    if(Array.isArray(meta.players)) setStartupPlayers(meta.players);
+    if(meta.date) $('startupDate').value=meta.date;
+    if(meta.category) $('startupCategory').value=meta.category;
+    if(meta.description) $('startupDesc').value=meta.description;
+    $('startupMsg').textContent='Analysis details loaded from JSON. Now choose its original video file(s).';
+  }catch(err){
+    $('startupMsg').textContent='JSON could not be read: '+(err.message||err);
+  }
+});
+
+$('startupForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  if(!state.root && !state.portableMode){
+    $('startupMsg').textContent='Select the Video Analysis folder first.';
+    return;
+  }
+  const mode=startupMode();
+  const players=selectedStartupPlayers();
+  const date=$('startupDate').value;
+  const category=$('startupCategory').value;
+  const description=$('startupDesc').value.trim();
+
+  try{
+    if(mode==='new'){
+      if(!players.length){$('startupMsg').textContent='Select at least one player.';return}
+      if(!date||!category){$('startupMsg').textContent='Choose the date and category.';return}
+      resetLoadedVideos();
+      applyStartupContext('new',players,date,category,description);
+      $('startupDialog').close();
+      setStatus(`New session ready for <b>${players.length}</b> player${players.length===1?'':'s'}. Opening the camera…`,'ok');
+      await openCamera();
+      return;
+    }
+
+    if(mode==='file'){
+      if(!players.length){$('startupMsg').textContent='Select at least one player.';return}
+      if(!date||!category){$('startupMsg').textContent='Choose the date and category.';return}
+      const files=[...$('startupVideoFiles').files];
+      if(!files.length){$('startupMsg').textContent='Choose at least one video file.';return}
+      resetLoadedVideos();
+      await loadSelectedVideos(files);
+      applyStartupContext('file',players,date,category,description);
+      $('startupDialog').close();
+      setStatus(`Video file loaded for <b>${players.length}</b> player${players.length===1?'':'s'}. Analyse it normally, then Save Analysis when ready.`,'ok');
+      return;
+    }
+
+    const jsonFile=$('startupReviewJson').files[0];
+    const videos=[...$('startupReviewVideos').files];
+    if(!jsonFile){$('startupMsg').textContent='Choose the previous analysis JSON file.';return}
+    if(!videos.length){$('startupMsg').textContent='Choose the original video file used for that analysis.';return}
+    const meta=await restoreReviewFromFiles(jsonFile,videos,players,date,category,description);
+    $('startupDialog').close();
+    setStatus(`Previous analysis restored${meta.date?' from <b>'+safeName(meta.date)+'</b>':''}. Drawings, angles and playback settings are editable again.`,'ok');
+  }catch(err){
+    $('startupMsg').textContent='Could not start the session: '+(err.message||err);
+  }
+});
+
+function stopCameraStream(){
+  if(state.cameraStream){
+    state.cameraStream.getTracks().forEach(t=>t.stop());
+    state.cameraStream=null;
+  }
+  state.cameraActive=false;
+  const v=$('videoA');
+  if(v.srcObject) v.srcObject=null;
+  $('openCameraBtn').style.display='';
+  $('startRecordBtn').style.display='none';
+  $('stopRecordBtn').style.display='none';
+  $('closeCameraBtn').style.display='none';
+}
+function loadVideo(letter,file){
+  if(letter==='A' && state.cameraActive) stopCameraStream();
+  const video=$('video'+letter);
+  const name=$('name'+letter);
+  const key='url'+letter;
+  if(state[key]) URL.revokeObjectURL(state[key]);
+  state['file'+letter]=file;
+  setLoop(letter,false);
+  state[key]=URL.createObjectURL(file);
+  video.srcObject=null;
+  video.src=state[key];
+  name.textContent=file.name;
+  video.load();
+  updateOverlayAvailability();
+}
+$('fileA').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadVideo('A',f)});
+$('fileB').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadVideo('B',f)});
+
+function chooseRecordingMime(){
+  const candidates=[
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4'
+  ];
+  for(const type of candidates){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return '';
+}
+async function openCamera(){
+  if(!navigator.mediaDevices?.getUserMedia){
+    setStatus('Camera access is not supported in this browser. You can still use Load video.','err');
+    return;
+  }
+  try{
+    if(state.cameraActive) return;
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment'},
+      audio:true
+    });
+    state.cameraStream=stream;
+    state.cameraActive=true;
+    const v=$('videoA');
+    if(state.urlA){URL.revokeObjectURL(state.urlA);state.urlA=null;}
+    state.fileA=null;
+    v.removeAttribute('src');
+    v.srcObject=stream;
+    v.muted=true;
+    updateMuteButton('A');
+    v.playsInline=true;
+    await v.play();
+    $('nameA').textContent='Live camera preview';
+    $('openCameraBtn').style.display='none';
+    $('startRecordBtn').style.display='';
+    $('closeCameraBtn').style.display='';
+    $('stopRecordBtn').style.display='none';
+    setStatus('Camera is open. Frame the shot, then press <b>Start recording</b>.','ok');
+  }catch(err){
+    setStatus(`Camera could not be opened: ${safeName(err.message||'permission denied')}. You can still use Load video.`,'err');
+  }
+}
+function startCameraRecording(){
+  if(!state.cameraStream || !window.MediaRecorder){
+    setStatus('Camera recording is not available in this browser.','err');
+    return;
+  }
+  try{
+    state.recordedChunks=[];
+    const mime=chooseRecordingMime();
+    const recorder=mime?new MediaRecorder(state.cameraStream,{mimeType:mime}):new MediaRecorder(state.cameraStream);
+    state.mediaRecorder=recorder;
+    recorder.ondataavailable=e=>{if(e.data && e.data.size) state.recordedChunks.push(e.data)};
+    recorder.onstop=()=>{
+      const type=recorder.mimeType || 'video/webm';
+      const ext=type.includes('mp4')?'.mp4':'.webm';
+      const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+      const blob=new Blob(state.recordedChunks,{type});
+      const file=new File([blob],`Camera_${stamp}${ext}`,{type,lastModified:Date.now()});
+      stopCameraStream();
+      loadVideo('A',file);
+      $('videoA').muted=false;
+      updateMuteButton('A');
+      setStatus('Camera recording is now loaded as <b>Video A</b>. You can analyse it, take screenshots and save it like any other video.','ok');
+    };
+    recorder.start(250);
+    $('startRecordBtn').style.display='none';
+    $('stopRecordBtn').style.display='';
+    $('closeCameraBtn').style.display='none';
+    $('nameA').textContent='Recording…';
+    setStatus('Recording in progress. Press <b>Stop recording</b> when finished.','ok');
+  }catch(err){
+    setStatus(`Recording could not start: ${safeName(err.message||'unknown error')}.`,'err');
+  }
+}
+function stopCameraRecording(){
+  if(state.mediaRecorder && state.mediaRecorder.state!=='inactive'){
+    state.mediaRecorder.stop();
+  }
+}
+function closeCamera(){
+  if(state.mediaRecorder && state.mediaRecorder.state!=='inactive'){
+    state.mediaRecorder.stop();
+    return;
+  }
+  stopCameraStream();
+  $('nameA').textContent=state.fileA?state.fileA.name:'No video loaded';
+  if(state.fileA) loadVideo('A',state.fileA);
+  setStatus('Camera closed. You can load an existing video or reopen the camera.','');
+}
+$('openCameraBtn').addEventListener('click',openCamera);
+$('startRecordBtn').addEventListener('click',startCameraRecording);
+$('stopRecordBtn').addEventListener('click',stopCameraRecording);
+$('closeCameraBtn').addEventListener('click',closeCamera);
+
+function togglePlay(letter){
+  const v=$('video'+letter);
+  if(!v.src && !v.srcObject)return;
+  if(state.loop[letter]) setLoop(letter,false);
+  if(v.paused) v.play(); else v.pause();
+}
+function updatePlayButtons(){
+  const pausedA=$('videoA').paused, pausedB=$('videoB').paused;
+  $('playA').innerHTML=iconSvg(pausedA?'play':'pause')+`<span>${pausedA?'Play':'Pause'}</span>`;
+  $('playB').innerHTML=iconSvg(pausedB?'play':'pause')+`<span>${pausedB?'Play':'Pause'}</span>`;
+  $('overlayPlayA').innerHTML=iconSvg(pausedA?'play':'pause');
+  $('overlayPlayB').innerHTML=iconSvg(pausedB?'play':'pause');
+  $('overlayPlayA').setAttribute('aria-label',pausedA?'Play Video A':'Pause Video A');
+  $('overlayPlayB').setAttribute('aria-label',pausedB?'Play Video B':'Pause Video B');
+  $('overlayPlayA').title=pausedA?'Play':'Pause';
+  $('overlayPlayB').title=pausedB?'Play':'Pause';
+  $('playBoth').innerHTML=iconSvg((pausedA&&pausedB)?'play':'pause')+`<span>${(pausedA&&pausedB)?'Play both':'Pause both'}</span>`;
+}
+$('playA').addEventListener('click',()=>togglePlay('A'));
+$('playB').addEventListener('click',()=>togglePlay('B'));
+$('overlayPlayA').addEventListener('click',ev=>{ev.stopPropagation();togglePlay('A')});
+$('overlayPlayB').addEventListener('click',ev=>{ev.stopPropagation();togglePlay('B')});
+function updateMuteButton(letter){
+  const v=$('video'+letter),btn=$('mute'+letter);
+  const muted=Boolean(v.muted);
+  btn.innerHTML=iconSvg(muted?'mute':'volume');
+  btn.setAttribute('aria-label',muted?`Unmute Video ${letter}`:`Mute Video ${letter}`);
+  btn.title=muted?'Unmute audio':'Mute audio';
+}
+function toggleMute(letter){
+  const v=$('video'+letter);
+  v.muted=!v.muted;
+  updateMuteButton(letter);
+}
+$('muteA').addEventListener('click',ev=>{ev.stopPropagation();toggleMute('A')});
+$('muteB').addEventListener('click',ev=>{ev.stopPropagation();toggleMute('B')});
+updateMuteButton('A');
+updateMuteButton('B');
+function updateLoopButton(letter){
+  const btn=$('loop'+letter), active=Boolean(state.loop[letter]);
+  btn.innerHTML=iconSvg('repeat');
+  btn.setAttribute('aria-pressed',String(active));
+  btn.setAttribute('aria-label',active?`Turn off loop for Video ${letter}`:`Loop Video ${letter}`);
+  btn.title=active?'Loop on — press again to stop looping':'Loop video';
+}
+function setLoop(letter,on){
+  const active=Boolean(on);
+  state.loop[letter]=active;
+  const v=$('video'+letter);
+  v.loop=active;
+  updateLoopButton(letter);
+}
+function toggleLoop(letter){
+  const v=$('video'+letter);
+  if(!v.src && !v.srcObject) return;
+  const next=!state.loop[letter];
+  setLoop(letter,next);
+  if(next && v.paused) v.play().catch(()=>{});
+}
+$('loopA').addEventListener('click',ev=>{ev.stopPropagation();toggleLoop('A')});
+$('loopB').addEventListener('click',ev=>{ev.stopPropagation();toggleLoop('B')});
+updateLoopButton('A');
+updateLoopButton('B');
+function updateFocusButton(letter){
+  const active=state.focus===letter;
+  const btn=$('focus'+letter);
+  btn.innerHTML=iconSvg(active?'minimize':'maximize');
+  btn.setAttribute('aria-pressed',String(active));
+  btn.setAttribute('aria-label',active?`Exit full screen for Video ${letter}`:`Full screen Video ${letter}`);
+  btn.title=active?'Exit full screen':'Full screen';
+}
+function setVideoFocus(letter,on){
+  const box=$('box'+letter);
+  const overlayFocus=state.overlayMode && letter==='A';
+
+  if(on){
+    if(state.focus && state.focus!==letter){
+      $('box'+state.focus)?.classList.remove('focus-fullscreen');
+      $('videoGrid').classList.remove('overlay-focus-fullscreen');
+      updateFocusButton(state.focus);
+    }
+    state.focus=letter;
+    if(overlayFocus)$('videoGrid').classList.add('overlay-focus-fullscreen');
+    else box.classList.add('focus-fullscreen');
+    document.body.classList.add('video-focus-open');
+  }else{
+    box.classList.remove('focus-fullscreen');
+    $('videoGrid').classList.remove('overlay-focus-fullscreen');
+    if(state.focus===letter)state.focus=null;
+    document.body.classList.remove('video-focus-open');
+  }
+  updateFocusButton(letter);
+  setTimeout(()=>{canvA?.redraw?.();canvB?.redraw?.();},40);
+}
+function toggleVideoFocus(letter){
+  setVideoFocus(letter,state.focus!==letter);
+}
+$('focusA').addEventListener('click',ev=>{ev.stopPropagation();toggleVideoFocus('A')});
+$('focusB').addEventListener('click',ev=>{ev.stopPropagation();toggleVideoFocus('B')});
+updateFocusButton('A');
+updateFocusButton('B');
+document.addEventListener('keydown',ev=>{
+  if(ev.key==='Escape'&&state.focus)setVideoFocus(state.focus,false);
+});
+
+$('videoA').addEventListener('play',()=>{ if($('linkPlayback').checked && $('videoB').src){ syncFrom('A'); $('videoB').play().catch(()=>{}); } updatePlayButtons();});
+$('videoA').addEventListener('pause',()=>{ if($('linkPlayback').checked && !$('videoB').paused) $('videoB').pause(); updatePlayButtons();});
+$('videoB').addEventListener('play',()=>{ if($('linkPlayback').checked && $('videoA').src){ syncFrom('B'); $('videoA').play().catch(()=>{}); } updatePlayButtons();});
+$('videoB').addEventListener('pause',()=>{ if($('linkPlayback').checked && !$('videoA').paused) $('videoA').pause(); updatePlayButtons();});
+$('playBoth').addEventListener('click',()=>{
+  const a=$('videoA'),b=$('videoB');
+  if(state.loop.A) setLoop('A',false);
+  if(state.loop.B) setLoop('B',false);
+  const shouldPlay=a.paused && b.paused;
+  if(shouldPlay){ if(a.src)a.play().catch(()=>{}); if(b.src)b.play().catch(()=>{}); }
+  else{ a.pause(); b.pause(); }
+  updatePlayButtons();
+});
+
+function signed(n){return `${n>0?'+':''}${n.toFixed(2)} s`}
+function setSpeeds(source){
+  const linked=$('linkPlayback').checked;
+  if(source==='A' && linked) $('speedB').value=$('speedA').value;
+  if(source==='B' && linked) $('speedA').value=$('speedB').value;
+  $('videoA').playbackRate=Number($('speedA').value);
+  $('videoB').playbackRate=Number($('speedB').value);
+  $('speedAOut').textContent=Number($('speedA').value).toFixed(2)+'×';
+  $('speedBOut').textContent=Number($('speedB').value).toFixed(2)+'×';
+}
+$('speedA').addEventListener('input',()=>setSpeeds('A'));
+$('speedB').addEventListener('input',()=>setSpeeds('B'));
+setSpeeds('A');
+
+function relOffset(){return Number($('offsetB').value)-Number($('offsetA').value)}
+function updateOffsets(){
+  $('offsetAOut').textContent=signed(Number($('offsetA').value));
+  $('offsetBOut').textContent=signed(Number($('offsetB').value));
+  if($('linkPlayback').checked) syncFrom('A');
+}
+$('offsetA').addEventListener('input',updateOffsets);
+$('offsetB').addEventListener('input',updateOffsets);
+updateOffsets();
+
+function clampTime(v,t){
+  if(!Number.isFinite(v.duration))return Math.max(0,t);
+  return Math.max(0,Math.min(v.duration,t));
+}
+function syncFrom(source){
+  const a=$('videoA'),b=$('videoB');
+  if(!a.src||!b.src)return;
+  if(source==='A') b.currentTime=clampTime(b,a.currentTime+relOffset());
+  else a.currentTime=clampTime(a,b.currentTime-relOffset());
+}
+$('alignBtn').addEventListener('click',()=>{
+  const a=$('videoA'),b=$('videoB'); if(!a.src||!b.src)return;
+  $('offsetA').value=0;
+  const d=Math.max(-5,Math.min(5,b.currentTime-a.currentTime));
+  $('offsetB').value=d.toFixed(2);
+  updateOffsets();
+});
+$('linkPlayback').addEventListener('change',()=>{if($('linkPlayback').checked){$('speedB').value=$('speedA').value;setSpeeds('A');syncFrom('A')}});
+
+function frameStep(letter,dir){
+  const v=$('video'+letter); if(!v.src)return;
+  v.pause(); v.currentTime=clampTime(v,v.currentTime+dir*(1/25));
+  if($('linkPlayback').checked) syncFrom(letter);
+}
+$('backA').addEventListener('click',()=>frameStep('A',-1));
+$('fwdA').addEventListener('click',()=>frameStep('A',1));
+$('backB').addEventListener('click',()=>frameStep('B',-1));
+$('fwdB').addEventListener('click',()=>frameStep('B',1));
+
+function formatClock(seconds){
+  const s=Math.max(0,Number(seconds)||0);
+  const mins=Math.floor(s/60), secs=Math.floor(s%60);
+  return `${mins}:${String(secs).padStart(2,'0')}`;
+}
+
+const seekState={A:false,B:false};
+
+function updateSeek(letter){
+  const v=$('video'+letter), seek=$('seek'+letter), out=$('overlayTime'+letter);
+  const duration=Number.isFinite(v.duration)?v.duration:0;
+  if(!seekState[letter]){
+    seek.max=duration||100;
+    seek.value=duration?Math.min(duration,v.currentTime||0):0;
+  }
+  out.textContent=`${formatClock(v.currentTime)} / ${formatClock(duration)}`;
+}
+
+function seekTo(letter,value){
+  const v=$('video'+letter);
+  if(!v.src||!Number.isFinite(v.duration)) return;
+  v.currentTime=clampTime(v,Number(value));
+  if($('linkPlayback').checked) syncFrom(letter);
+  updateSeek('A');updateSeek('B');
+}
+
+['A','B'].forEach(letter=>{
+  const seek=$('seek'+letter);
+  const v=$('video'+letter);
+  seek.addEventListener('pointerdown',ev=>{seekState[letter]=true;ev.stopPropagation()});
+  seek.addEventListener('input',ev=>{seekState[letter]=true;seekTo(letter,ev.target.value);ev.stopPropagation()});
+  seek.addEventListener('change',ev=>{seekTo(letter,ev.target.value);seekState[letter]=false;ev.stopPropagation()});
+  seek.addEventListener('pointerup',ev=>{seekTo(letter,ev.target.value);seekState[letter]=false;ev.stopPropagation()});
+  seek.addEventListener('click',ev=>ev.stopPropagation());
+  v.addEventListener('loadedmetadata',()=>updateSeek(letter));
+  v.addEventListener('durationchange',()=>updateSeek(letter));
+});
+
+['overlayControlsA','overlayControlsB'].forEach(id=>{
+  const el=$(id);
+  ['pointerdown','pointermove','pointerup','click'].forEach(type=>el.addEventListener(type,ev=>ev.stopPropagation()));
+});
+['desktopZoomControlsA','desktopZoomControlsB'].forEach(id=>{
+  const el=$(id);
+  ['pointerdown','pointermove','pointerup','click'].forEach(type=>el.addEventListener(type,ev=>ev.stopPropagation()));
+});
+['overlayBlendControl'].forEach(id=>{
+  const el=$(id);
+  ['pointerdown','pointermove','pointerup','click'].forEach(type=>el.addEventListener(type,ev=>ev.stopPropagation()));
+});
+
+
+function timeLoop(){
+  $('timeA').textContent=Number($('videoA').currentTime||0).toFixed(2)+' s';
+  $('timeB').textContent=Number($('videoB').currentTime||0).toFixed(2)+' s';
+  updateSeek('A');updateSeek('B');
+  requestAnimationFrame(timeLoop);
+}
+timeLoop();
+
+function setupCanvas(letter){
+  const canvas=$('canvas'+letter), box=$('box'+letter), media=$('mediaLayer'+letter), video=$('video'+letter), ctx=canvas.getContext('2d');
+  const ds=state.draw[letter];
+
+  function baseSize(){
+    return {w:Math.max(1,box.clientWidth),h:Math.max(1,box.clientHeight)};
+  }
+
+  function videoContentCss(){
+    const {w:bw,h:bh}=baseSize();
+    const vw=video.videoWidth||16, vh=video.videoHeight||9;
+    const vr=vw/vh, br=bw/bh;
+    let w,h,x,y;
+    if(br>vr){
+      h=bh; w=h*vr; x=(bw-w)/2; y=0;
+    }else{
+      w=bw; h=w/vr; x=0; y=(bh-h)/2;
+    }
+    return {x,y,w,h};
+  }
+
+  function videoContentPx(){
+    const dpr=window.devicePixelRatio||1, r=videoContentCss();
+    return {x:r.x*dpr,y:r.y*dpr,w:r.w*dpr,h:r.h*dpr};
+  }
+
+  function clampZoom(){
+    const {w,h}=baseSize(), z=ds.zoom;
+    const minX=w-w*z.scale, minY=h-h*z.scale;
+    z.tx=Math.max(minX,Math.min(0,z.tx));
+    z.ty=Math.max(minY,Math.min(0,z.ty));
+  }
+
+  function applyZoom(){
+    clampZoom();
+    const z=ds.zoom;
+    renderMediaTransform(letter);
+    const pct=Math.round(z.scale*100)+'%';
+    const out=$('zoom'+letter+'Out');
+    const overlayOut=$('desktopZoomValue'+letter);
+    if(out) out.textContent=pct;
+    if(overlayOut) overlayOut.textContent=pct;
+    if(state.overlayMode)updateOverlayActiveLayerUI();
+  }
+
+  function zoomAt(newScale,clientX,clientY){
+    const z=ds.zoom;
+    const oldScale=z.scale;
+    newScale=Math.max(1,Math.min(5,newScale));
+    if(Math.abs(newScale-oldScale)<0.0001)return;
+
+    const r=box.getBoundingClientRect();
+    const anchorX=(clientX-r.left-z.tx)/oldScale;
+    const anchorY=(clientY-r.top-z.ty)/oldScale;
+    z.scale=newScale;
+    z.tx=(clientX-r.left)-anchorX*newScale;
+    z.ty=(clientY-r.top)-anchorY*newScale;
+    applyZoom();
+  }
+
+  function zoomAtCentre(newScale){
+    const r=box.getBoundingClientRect();
+    zoomAt(newScale,r.left+r.width/2,r.top+r.height/2);
+  }
+
+  function resetZoom(){
+    ds.zoom.scale=1;ds.zoom.tx=0;ds.zoom.ty=0;ds.zoom.pointers.clear();ds.zoom.pinching=false;
+    applyZoom();
+  }
+
+  const resetBtn=$('resetZoom'+letter);
+  if(resetBtn) resetBtn.addEventListener('click',ev=>{
+    if(state.overlayMode && letter==='A'){
+      ev.stopPropagation();
+      resetOverlayActiveZoom();
+      return;
+    }
+    resetZoom();
+  });
+
+  const zoomInBtn=$('zoomIn'+letter),zoomOutBtn=$('zoomOut'+letter);
+  if(zoomInBtn)zoomInBtn.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    if(state.overlayMode && letter==='A'){
+      const active=state.overlayPanTarget==='B'?'B':'A';
+      zoomOverlayActiveCentre(Math.min(5,Math.round((state.draw[active].zoom.scale+0.25)*100)/100));
+      return;
+    }
+    zoomAtCentre(Math.min(5,Math.round((ds.zoom.scale+0.25)*100)/100));
+  });
+  if(zoomOutBtn)zoomOutBtn.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    if(state.overlayMode && letter==='A'){
+      const active=state.overlayPanTarget==='B'?'B':'A';
+      zoomOverlayActiveCentre(Math.max(1,Math.round((state.draw[active].zoom.scale-0.25)*100)/100));
+      return;
+    }
+    zoomAtCentre(Math.max(1,Math.round((ds.zoom.scale-0.25)*100)/100));
+  });
+
+  box.addEventListener('wheel',ev=>{
+    // Laptop/desktop mouse wheel zoom. Keep the inspected point under the cursor.
+    if(ev.ctrlKey)return;
+    ev.preventDefault();
+    const factor=ev.deltaY<0?1.12:(1/1.12);
+    if(state.overlayMode && letter==='A'){
+      const active=state.overlayPanTarget==='B'?'B':'A';
+      zoomOverlayActiveAt(state.draw[active].zoom.scale*factor,ev.clientX,ev.clientY);
+      return;
+    }
+    zoomAt(ds.zoom.scale*factor,ev.clientX,ev.clientY);
+  },{passive:false});
+
+  function canPan(){
+    return ds.zoom.scale>1.001;
+  }
+  function beginPan(ev){
+    if(!canPan())return false;
+    ds.panDragging=true;
+    ds.panStart={x:ev.clientX,y:ev.clientY};
+    ds.panOrigin={tx:ds.zoom.tx,ty:ds.zoom.ty};
+    box.classList.add('pan-dragging');
+    try{canvas.setPointerCapture(ev.pointerId)}catch{}
+    ev.preventDefault();
+    return true;
+  }
+  function movePan(ev){
+    if(!ds.panDragging||!ds.panStart||!ds.panOrigin)return false;
+    ds.zoom.tx=ds.panOrigin.tx+(ev.clientX-ds.panStart.x);
+    ds.zoom.ty=ds.panOrigin.ty+(ev.clientY-ds.panStart.y);
+    applyZoom();
+    ev.preventDefault();
+    return true;
+  }
+  function endPan(ev){
+    if(!ds.panDragging)return false;
+    ds.panDragging=false;
+    ds.panStart=null;
+    ds.panOrigin=null;
+    box.classList.remove('pan-dragging');
+    try{canvas.releasePointerCapture(ev.pointerId)}catch{}
+    ev.preventDefault();
+    return true;
+  }
+
+
+  let lastBaseSize=null;
+  function resize(){
+    const {w,h}=baseSize(), dpr=window.devicePixelRatio||1;
+    if(lastBaseSize && ds.zoom.scale>1.001){
+      if(lastBaseSize.w>0)ds.zoom.tx*=w/lastBaseSize.w;
+      if(lastBaseSize.h>0)ds.zoom.ty*=h/lastBaseSize.h;
+    }
+    lastBaseSize={w,h};
+    canvas.width=Math.max(1,Math.round(w*dpr));
+    canvas.height=Math.max(1,Math.round(h*dpr));
+    canvas.style.width=w+'px';canvas.style.height=h+'px';
+    applyZoom();redraw();
+  }
+
+  // Convert a pointer position to normalized VIDEO coordinates, not box coordinates.
+  function pt(ev){
+    const rect=media.getBoundingClientRect(), z=ds.zoom, c=videoContentCss();
+    const localX=(ev.clientX-rect.left)/z.scale;
+    const localY=(ev.clientY-rect.top)/z.scale;
+    const x=(localX-c.x)/c.w, y=(localY-c.y)/c.h;
+    return {x,y,inside:x>=0&&x<=1&&y>=0&&y<=1};
+  }
+
+  // Normalized video coordinates -> canvas backing pixels.
+  function toPx(p){
+    const c=videoContentPx();
+    return{x:c.x+p.x*c.w,y:c.y+p.y*c.h};
+  }
+
+  function clamp01(n){return Math.max(0,Math.min(1,n))}
+  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+  function pointSegDist(p,a,b){
+    const vx=b.x-a.x,vy=b.y-a.y,wx=p.x-a.x,wy=p.y-a.y,vv=vx*vx+vy*vy;
+    const t=vv?Math.max(0,Math.min(1,(wx*vx+wy*vy)/vv)):0;
+    return Math.hypot(p.x-(a.x+t*vx),p.y-(a.y+t*vy));
+  }
+  function bounds(item){
+    const xs=item.pts.map(p=>p.x),ys=item.pts.map(p=>p.y);
+    return{minX:Math.min(...xs),maxX:Math.max(...xs),minY:Math.min(...ys),maxY:Math.max(...ys)};
+  }
+  function moveItem(item,dx,dy){
+    const b=bounds(item);
+    dx=Math.max(-b.minX,Math.min(1-b.maxX,dx));
+    dy=Math.max(-b.minY,Math.min(1-b.maxY,dy));
+    item.pts=item.pts.map(p=>({x:p.x+dx,y:p.y+dy}));
+  }
+  function angleDegreesPx(pts){
+    if(!pts||pts.length<3)return 0;
+    const[a,b,c]=pts,v1={x:a.x-b.x,y:a.y-b.y},v2={x:c.x-b.x,y:c.y-b.y};
+    const m1=Math.hypot(v1.x,v1.y),m2=Math.hypot(v2.x,v2.y);
+    if(!m1||!m2)return 0;
+    return Math.acos(Math.max(-1,Math.min(1,(v1.x*v2.x+v1.y*v2.y)/(m1*m2))))*180/Math.PI;
+  }
+  function drawAngleArc(a,b,c,color,lw){
+    const r1=Math.hypot(a.x-b.x,a.y-b.y),r2=Math.hypot(c.x-b.x,c.y-b.y);
+    const radius=Math.max(24*(window.devicePixelRatio||1),Math.min(r1,r2)*0.22);
+    let s=Math.atan2(a.y-b.y,a.x-b.x),e=Math.atan2(c.y-b.y,c.x-b.x),diff=e-s;
+    while(diff<=-Math.PI)diff+=Math.PI*2;
+    while(diff>Math.PI)diff-=Math.PI*2;
+    ctx.save();ctx.strokeStyle=color;ctx.lineWidth=lw;
+    ctx.beginPath();ctx.arc(b.x,b.y,radius,s,s+diff,diff<0);ctx.stroke();
+    const mid=s+diff/2,off=20*(window.devicePixelRatio||1);
+    ctx.fillStyle=color;ctx.font=`${15*(window.devicePixelRatio||1)}px Segoe UI`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(angleDegreesPx([a,b,c]).toFixed(1)+'°',
+      b.x+Math.cos(mid)*(radius+off),b.y+Math.sin(mid)*(radius+off));
+    ctx.restore();
+  }
+  function itemHandles(item){
+    if(item.type==='line'||item.type==='angle')return item.pts.map((p,i)=>({kind:'point',index:i,p}));
+    if(item.type==='rect'){
+      const a=item.pts[0],b=item.pts[1];
+      return[
+        {kind:'rect',index:0,p:{x:a.x,y:a.y}},
+        {kind:'rect',index:1,p:{x:b.x,y:a.y}},
+        {kind:'rect',index:2,p:{x:b.x,y:b.y}},
+        {kind:'rect',index:3,p:{x:a.x,y:b.y}}
+      ];
+    }
+    if(item.type==='circle'){
+      return[
+        {kind:'circleCenter',index:0,p:item.pts[0]},
+        {kind:'circleRadius',index:1,p:item.pts[1]}
+      ];
+    }
+    if(item.type==='free'){
+      const b=bounds(item);
+      return[
+        {kind:'freeScale',index:0,p:{x:b.minX,y:b.minY}},
+        {kind:'freeScale',index:1,p:{x:b.maxX,y:b.maxY}}
+      ];
+    }
+    return[];
+  }
+  function drawHandles(item,index){
+    if(ds.tool!=='edit'||index!==ds.selected)return;
+    const dpr=window.devicePixelRatio||1,r=9*dpr;
+    ctx.save();
+    for(const h of itemHandles(item)){
+      const p=toPx(h.p);
+      ctx.beginPath();ctx.fillStyle='rgba(255,255,255,.96)';ctx.strokeStyle=item.color;ctx.lineWidth=3*dpr;
+      ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawItem(item,index=-1){
+    ctx.save();const dpr=window.devicePixelRatio||1;
+    ctx.strokeStyle=item.color;ctx.fillStyle=item.color;ctx.lineWidth=4*dpr;ctx.lineCap='round';ctx.lineJoin='round';
+    const pts=item.pts.map(toPx);
+    if(item.type==='free'){
+      ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+    }else if(item.type==='line'){
+      if(pts.length>=2){ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);ctx.lineTo(pts[1].x,pts[1].y);ctx.stroke();}
+    }else if(item.type==='rect'){
+      if(pts.length>=2)ctx.strokeRect(pts[0].x,pts[0].y,pts[1].x-pts[0].x,pts[1].y-pts[0].y);
+    }else if(item.type==='circle'){
+      if(pts.length>=2){
+        const c=pts[0],e=pts[1],r=Math.hypot(e.x-c.x,e.y-c.y);
+        ctx.beginPath();ctx.arc(c.x,c.y,r,0,Math.PI*2);ctx.stroke();
+      }
+    }else if(item.type==='angle'){
+      if(pts.length>=3){
+        const[a,b,c]=pts;
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.lineTo(c.x,c.y);ctx.stroke();
+        drawAngleArc(a,b,c,item.color,ctx.lineWidth);
+      }
+    }
+    ctx.restore();drawHandles(item,index);
+  }
+  function redraw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ds.items.forEach((item,index)=>drawItem(item,index));
+    if(ds.working)drawItem(ds.working,-1);
+    if(ds.anglePts.length)drawItem({type:'free',color:$('color'+letter).value,pts:ds.anglePts},-1);
+  }
+  function hitItem(item,pPx){
+    const t=24*(window.devicePixelRatio||1),pts=item.pts.map(toPx);
+    for(const h of itemHandles(item)){if(dist(pPx,toPx(h.p))<=t)return{kind:h.kind,index:h.index}}
+    if(item.type==='line')return pointSegDist(pPx,pts[0],pts[1])<=t?{kind:'whole'}:null;
+    if(item.type==='angle')return(pointSegDist(pPx,pts[0],pts[1])<=t||pointSegDist(pPx,pts[1],pts[2])<=t)?{kind:'whole'}:null;
+    if(item.type==='rect'){
+      const a=pts[0],b=pts[1],minX=Math.min(a.x,b.x),maxX=Math.max(a.x,b.x),minY=Math.min(a.y,b.y),maxY=Math.max(a.y,b.y);
+      return(pPx.x>=minX-t&&pPx.x<=maxX+t&&pPx.y>=minY-t&&pPx.y<=maxY+t)?{kind:'whole'}:null;
+    }
+    if(item.type==='circle'){
+      const c=pts[0],r=Math.hypot(pts[1].x-c.x,pts[1].y-c.y);
+      return dist(pPx,c)<=r+t?{kind:'whole'}:null;
+    }
+    if(item.type==='free'){
+      for(let i=1;i<pts.length;i++)if(pointSegDist(pPx,pts[i-1],pts[i])<=t)return{kind:'whole'};
+    }
+    return null;
+  }
+  function findTarget(p){
+    const pp=toPx(p);
+    for(let i=ds.items.length-1;i>=0;i--){const hit=hitItem(ds.items[i],pp);if(hit)return{item:i,...hit}}
+    return null;
+  }
+  function editHandle(item,hit,p){
+    p={x:clamp01(p.x),y:clamp01(p.y)};
+    if(hit.kind==='point'){item.pts[hit.index]=p;return}
+    if(hit.kind==='circleCenter'){
+      const old=item.pts[0];moveItem(item,p.x-old.x,p.y-old.y);return
+    }
+    if(hit.kind==='circleRadius'){item.pts[1]=p;return}
+    if(hit.kind==='rect'){
+      const a=item.pts[0],b=item.pts[1],corners=[
+        {x:b.x,y:b.y},{x:a.x,y:b.y},{x:a.x,y:a.y},{x:b.x,y:a.y}
+      ];
+      const opp=corners[hit.index];item.pts=[opp,p];return
+    }
+    if(hit.kind==='freeScale'){
+      const oldB=bounds(item),anchor=hit.index===0?{x:oldB.maxX,y:oldB.maxY}:{x:oldB.minX,y:oldB.minY};
+      const oldH=hit.index===0?{x:oldB.minX,y:oldB.minY}:{x:oldB.maxX,y:oldB.maxY};
+      const sx=(oldH.x-anchor.x)!==0?(p.x-anchor.x)/(oldH.x-anchor.x):1;
+      const sy=(oldH.y-anchor.y)!==0?(p.y-anchor.y)/(oldH.y-anchor.y):1;
+      item.pts=item.pts.map(q=>({x:clamp01(anchor.x+(q.x-anchor.x)*sx),y:clamp01(anchor.y+(q.y-anchor.y)*sy)}));return
+    }
+  }
+
+  let down=false,start=null,pinchCancelledDrawing=false;
+  function pointerPair(){const vals=[...ds.zoom.pointers.values()];return vals.length>=2?[vals[0],vals[1]]:null}
+  function pairDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+  function pairMid(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2}}
+
+  canvas.addEventListener('pointerdown',ev=>{
+    canvas.setPointerCapture(ev.pointerId);
+
+    const wantsDesktopPan = ev.pointerType!=='touch' && (spacePanHeld || ds.tool==='pan');
+    const wantsOverlayLayerPan = state.overlayMode && letter==='A' &&
+      ((ev.pointerType!=='touch' && (spacePanHeld || ds.tool==='pan')) ||
+       (ev.pointerType==='touch' && ds.tool==='pan'));
+
+    if(wantsOverlayLayerPan){
+      if(beginOverlayLayerPan(ev,canvas))return;
+    }
+
+    if(wantsDesktopPan){
+      if(beginPan(ev))return;
+      // Outside Overlay, normal Pan only applies once zoomed above 100%.
+      if(ds.tool==='pan'||spacePanHeld){ev.preventDefault();return;}
+    }
+
+    if(ev.pointerType==='touch'){
+      ds.zoom.pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+      if(ds.zoom.pointers.size>=2){
+        const pair=pointerPair();
+        if(pair){
+          const[a,b]=pair,mid=pairMid(a,b),r=box.getBoundingClientRect(),z=ds.zoom;
+          z.pinching=true;z.startDist=Math.max(1,pairDistance(a,b));z.startScale=z.scale;
+          z.anchorX=(mid.x-r.left-z.tx)/z.scale;z.anchorY=(mid.y-r.top-z.ty)/z.scale;
+          ds.working=null;down=false;pinchCancelledDrawing=true;ds.dragMode=null;ds.lastPointer=null;
+          ev.preventDefault();return;
+        }
+      }
+    }
+    if(ds.zoom.pinching)return;
+    const p=pt(ev);
+    if(!p.inside)return;
+    if(ds.tool==='none')return;
+
+    if(ds.tool==='edit'){
+      const hit=findTarget(p);
+      if(!hit){ds.selected=-1;ds.dragMode=null;redraw();return}
+      ds.selected=hit.item;ds.dragMode=hit;ds.lastPointer=p;redraw();return
+    }
+    if(ds.tool==='angle'){
+      ds.anglePts.push({x:clamp01(p.x),y:clamp01(p.y)});
+      if(ds.anglePts.length===3){ds.items.push({type:'angle',color:$('color'+letter).value,pts:[...ds.anglePts]});ds.anglePts=[];}
+      redraw();return
+    }
+    down=true;start={x:clamp01(p.x),y:clamp01(p.y)};
+    ds.working={type:ds.tool,color:$('color'+letter).value,pts:[start]};
+  });
+
+  canvas.addEventListener('pointermove',ev=>{
+    if(state.overlayMode && letter==='A' && state.overlayLayerDrag){
+      moveOverlayLayerPan(ev);
+      return;
+    }
+    if(ds.panDragging){
+      movePan(ev);
+      return;
+    }
+    if(ev.pointerType==='touch'&&ds.zoom.pointers.has(ev.pointerId)){
+      ds.zoom.pointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+      if(ds.zoom.pinching&&ds.zoom.pointers.size>=2){
+        const pair=pointerPair();
+        if(pair){
+          const[a,b]=pair,mid=pairMid(a,b),r=box.getBoundingClientRect(),z=ds.zoom;
+          const ratio=pairDistance(a,b)/z.startDist;
+          z.scale=Math.max(1,Math.min(5,z.startScale*ratio));
+          z.tx=(mid.x-r.left)-z.anchorX*z.scale;z.ty=(mid.y-r.top)-z.anchorY*z.scale;
+          applyZoom();ev.preventDefault();return;
+        }
+      }
+    }
+    if(ds.zoom.pinching)return;
+    const p=pt(ev);
+    if(!p.inside && !down && !(ds.tool==='edit'&&ds.selected>=0))return;
+    const cp={x:clamp01(p.x),y:clamp01(p.y)};
+
+    if(ds.tool==='edit'&&ds.selected>=0&&ds.dragMode){
+      const item=ds.items[ds.selected];
+      if(ds.dragMode.kind==='whole'&&ds.lastPointer){
+        moveItem(item,cp.x-ds.lastPointer.x,cp.y-ds.lastPointer.y);ds.lastPointer=cp;
+      }else editHandle(item,ds.dragMode,cp);
+      redraw();return
+    }
+    if(!down||!ds.working)return;
+    if(ds.tool==='free')ds.working.pts.push(cp);
+    else ds.working.pts=[start,cp];
+    redraw();
+  });
+
+  function finishPointer(ev){
+    if(state.overlayMode && letter==='A' && state.overlayLayerDrag){
+      endOverlayLayerPan(ev,canvas);
+      ds.working=null;down=false;ds.dragMode=null;ds.lastPointer=null;
+      redraw();
+      return;
+    }
+    if(ds.panDragging){
+      endPan(ev);
+      ds.working=null;down=false;ds.dragMode=null;ds.lastPointer=null;
+      redraw();
+      return;
+    }
+    if(ev.pointerType==='touch')ds.zoom.pointers.delete(ev.pointerId);
+    if(ds.zoom.pinching){
+      if(ds.zoom.pointers.size<2){ds.zoom.pinching=false;ds.zoom.startDist=0;ds.zoom.startScale=ds.zoom.scale;pinchCancelledDrawing=true}
+      ds.working=null;down=false;ds.dragMode=null;ds.lastPointer=null;redraw();return
+    }
+    if(pinchCancelledDrawing){
+      if(ds.zoom.pointers.size===0)pinchCancelledDrawing=false;
+      ds.working=null;down=false;ds.dragMode=null;ds.lastPointer=null;redraw();return
+    }
+    if(ds.tool==='edit'){ds.dragMode=null;ds.lastPointer=null;redraw();return}
+    if(down&&ds.working){ds.items.push(ds.working);ds.working=null;down=false;redraw();}
+  }
+
+  canvas.addEventListener('pointerup',finishPointer);
+  canvas.addEventListener('pointercancel',finishPointer);
+  video.addEventListener('loadedmetadata',resize);
+  new ResizeObserver(resize).observe(box);
+  resize();
+  return{redraw,getContentRectPx:videoContentPx};
+}
+const canvA=setupCanvas('A'),canvB=setupCanvas('B');
+
+function setupToolDrawer(letter){
+  const toggle=$('toolDrawerToggle'+letter),drawer=$('toolDrawer'+letter);
+  const toolIcon=toggle.querySelector('.icon')?.outerHTML||'';
+  const setOpen=open=>{
+    drawer.classList.toggle('open',open);
+    toggle.setAttribute('aria-expanded',String(open));
+    toggle.innerHTML=toolIcon+`<span>Tools</span>`+`<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${open?'M7 15l5-5 5 5':'M7 9l5 5 5-5'}"/></svg>`;
+  };
+  toggle.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    setOpen(!drawer.classList.contains('open'));
+  });
+  drawer.addEventListener('click',ev=>ev.stopPropagation());
+  ['pointerdown','pointermove','pointerup'].forEach(type=>drawer.addEventListener(type,ev=>ev.stopPropagation()));
+  return setOpen;
+}
+const setDrawerA=setupToolDrawer('A');
+const setDrawerB=setupToolDrawer('B');
+
+document.querySelectorAll('.toolA').forEach(b=>b.addEventListener('click',()=>{
+  const sameTool = state.draw.A.tool===b.dataset.tool && b.classList.contains('soft');
+  document.querySelectorAll('.toolA').forEach(x=>x.classList.remove('soft'));
+  if(sameTool){
+    state.draw.A.tool='none';
+    state.draw.A.selected=-1;
+    state.draw.A.anglePts=[];
+  }else{
+    state.draw.A.tool=b.dataset.tool;
+    if(state.draw.A.tool!=='edit') state.draw.A.selected=-1;
+    b.classList.add('soft');
+  }
+  $('boxA').classList.toggle('pan-active',state.draw.A.tool==='pan');
+  canvA.redraw();
+}));
+document.querySelectorAll('.toolB').forEach(b=>b.addEventListener('click',()=>{
+  const sameTool = state.draw.B.tool===b.dataset.tool && b.classList.contains('soft');
+  document.querySelectorAll('.toolB').forEach(x=>x.classList.remove('soft'));
+  if(sameTool){
+    state.draw.B.tool='none';
+    state.draw.B.selected=-1;
+    state.draw.B.anglePts=[];
+  }else{
+    state.draw.B.tool=b.dataset.tool;
+    if(state.draw.B.tool!=='edit') state.draw.B.selected=-1;
+    b.classList.add('soft');
+  }
+  $('boxB').classList.toggle('pan-active',state.draw.B.tool==='pan');
+  canvB.redraw();
+}));
+$('undoA').addEventListener('click',()=>{state.draw.A.items.pop();canvA.redraw()});
+$('undoB').addEventListener('click',()=>{state.draw.B.items.pop();canvB.redraw()});
+$('clearA').addEventListener('click',()=>{state.draw.A.items=[];state.draw.A.anglePts=[];state.draw.A.selected=-1;canvA.redraw()});
+$('clearB').addEventListener('click',()=>{state.draw.B.items=[];state.draw.B.anglePts=[];state.draw.B.selected=-1;canvB.redraw()});
+
+async function makeScreenshot(letter){
+  const video=$('video'+letter),overlay=$('canvas'+letter);
+  if(!video.src){alert('Load Video '+letter+' first.');return null}
+
+  if(state.overlayMode && letter==='A' && $('videoB').src){
+    const box=$('boxA');
+    const bw=Math.max(1,box.clientWidth),bh=Math.max(1,box.clientHeight);
+    const dpr=window.devicePixelRatio||1;
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(bw*dpr));
+    c.height=Math.max(1,Math.round(bh*dpr));
+    const ctx=c.getContext('2d');
+    ctx.fillStyle='#111';ctx.fillRect(0,0,c.width,c.height);
+
+    function contentRect(v){
+      const vw=v.videoWidth||16,vh=v.videoHeight||9,vr=vw/vh,br=bw/bh;
+      if(br>vr){
+        const h=bh,w=h*vr;return{x:(bw-w)/2,y:0,w,h};
+      }
+      const w=bw,h=w/vr;return{x:0,y:(bh-h)/2,w,h};
+    }
+    function drawLayer(L,videoAlpha){
+      const v=$('video'+L),z=state.draw[L].zoom,s=overlayShiftFor(L),r=contentRect(v);
+      ctx.save();
+      ctx.setTransform(
+        dpr*z.scale,0,0,dpr*z.scale,
+        dpr*(z.tx+s.x),dpr*(z.ty+s.y)
+      );
+      ctx.globalAlpha=videoAlpha;
+      ctx.drawImage(v,r.x,r.y,r.w,r.h);
+      ctx.globalAlpha=1;
+      const ov=$('canvas'+L);
+      ctx.drawImage(ov,0,0,ov.width,ov.height,0,0,bw,bh);
+      ctx.restore();
+    }
+
+    drawLayer('B',1);
+    drawLayer('A',state.overlayBlend/100);
+    return await new Promise(res=>c.toBlob(blob=>res(blob),'image/png'));
+  }
+
+  const w=video.videoWidth||1280,h=video.videoHeight||720;
+  const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');
+  ctx.drawImage(video,0,0,w,h);
+  const helper=letter==='A'?canvA:canvB;
+  const r=helper.getContentRectPx();
+  ctx.drawImage(overlay,r.x,r.y,r.w,r.h,0,0,w,h);
+  return await new Promise(res=>c.toBlob(blob=>res(blob),'image/png'));
+}
+async function stageShot(letter){
+  const blob=await makeScreenshot(letter); if(!blob)return;
+  state.screenshots.push({letter,blob,time:$('video'+letter).currentTime});
+  setStatus(`Screenshot staged from Video ${letter} at ${$('video'+letter).currentTime.toFixed(2)} s. It will be written when you save.`,'ok');
+}
+$('shotA').addEventListener('click',()=>stageShot('A'));
+$('shotB').addEventListener('click',()=>stageShot('B'));
+
+function sessionFolderName(date,cat,desc){
+  return `${date} ${safeName(cat)}${String(desc||'').trim()?' - '+safeName(desc):''}`;
+}
+function baseFileName(date,cat,desc){
+  return `${date}_${slug(cat)}${String(desc||'').trim()?'_'+slug(desc):''}`;
+}
+async function readJsonHandle(handle){
+  const f=await handle.getFile();
+  const text=await f.text();
+  return JSON.parse(text);
+}
+async function findSessionMedia(meta){
+  if(!state.playersDir || !meta?.players?.length) return {fileA:null,fileB:null};
+  const player=meta.players[0];
+  const pdir=await state.playersDir.getDirectoryHandle(player);
+  const sdir=await pdir.getDirectoryHandle(sessionFolderName(meta.date,meta.category,meta.description));
+  let fileA=null,fileB=null,firstVideo=null;
+  for await (const [name,handle] of sdir.entries()){
+    if(handle.kind!=='file') continue;
+    const f=await handle.getFile();
+    if(f.type.startsWith('video/')){
+      if(!firstVideo) firstVideo=f;
+      if(/_A_original/i.test(name)) fileA=f;
+      if(/_B_original/i.test(name)) fileB=f;
+    }
+  }
+  if(!fileA) fileA=firstVideo;
+  return {fileA,fileB};
+}
+async function listSavedSessions(){
+  state.savedSessions=[];
+  if(!state.dataDir) return [];
+  for await (const [name,handle] of state.dataDir.entries()){
+    if(handle.kind!=='file' || !name.toLowerCase().endsWith('.json')) continue;
+    try{
+      const meta=await readJsonHandle(handle);
+      if(meta && meta.date && meta.category){
+        state.savedSessions.push({name,handle,meta});
+      }
+    }catch{}
+  }
+  state.savedSessions.sort((a,b)=>{
+    const da=String(a.meta.savedAt||a.meta.date||''), db=String(b.meta.savedAt||b.meta.date||'');
+    return db.localeCompare(da);
+  });
+  return state.savedSessions;
+}
+function resetAnalysisState(){
+  if(state.overlayMode)setOverlayMode(false);
+  state.overlayShift.A={x:0,y:0};
+  state.overlayShift.B={x:0,y:0};
+  state.overlayPanTarget='A';
+  for(const L of ['A','B']){
+    state.draw[L].zoom.scale=1;
+    state.draw[L].zoom.tx=0;
+    state.draw[L].zoom.ty=0;
+    state.draw[L].zoom.pointers?.clear?.();
+    state.draw[L].zoom.pinching=false;
+    renderMediaTransform(L);
+    refreshZoomReadouts(L);
+  }
+  setOverlayPanTarget('A');
+  state.screenshots=[];
+  setLoop('A',false);
+  setLoop('B',false);
+  for(const L of ['A','B']){
+    state.draw[L].items=[];
+    state.draw[L].working=null;
+    state.draw[L].anglePts=[];
+    state.draw[L].selected=-1;
+    state.draw[L].tool='none';
+    document.querySelectorAll('.tool'+L).forEach(x=>x.classList.remove('soft'));
+  }
+  canvA?.redraw?.();canvB?.redraw?.();
+}
+async function openSavedSession(entry){
+  const meta=entry.meta;
+  try{
+    const media=await findSessionMedia(meta);
+    if(!media.fileA && !media.fileB) throw new Error('No saved video could be found in the player session folder.');
+    resetAnalysisState();
+    if(media.fileA) loadVideo('A',media.fileA);
+    if(media.fileB){
+      setDualMode(true);
+      loadVideo('B',media.fileB);
+    }else{
+      setDualMode(false);
+    }
+    state.draw.A.items=Array.isArray(meta.annotations?.A)?JSON.parse(JSON.stringify(meta.annotations.A)):[];
+    state.draw.B.items=Array.isArray(meta.annotations?.B)?JSON.parse(JSON.stringify(meta.annotations.B)):[];
+    $('speedA').value=meta.videoA?.speed??1;
+    $('offsetA').value=meta.videoA?.offset??0;
+    $('speedB').value=meta.videoB?.speed??1;
+    $('offsetB').value=meta.videoB?.offset??0;
+    $('linkPlayback').checked=meta.linked!==false;
+    if(meta.overlay){
+      $('overlayBlend').value=String(meta.overlay.blend ?? meta.overlay.opacityA ?? 50);
+      state.overlayShift.A={
+        x:Number(meta.overlay.shiftA?.x)||0,
+        y:Number(meta.overlay.shiftA?.y)||0
+      };
+      state.overlayShift.B={
+        x:Number(meta.overlay.shiftB?.x)||0,
+        y:Number(meta.overlay.shiftB?.y)||0
+      };
+      if(meta.overlay.zoomA){
+        state.draw.A.zoom.scale=Math.max(1,Math.min(5,Number(meta.overlay.zoomA.scale)||1));
+        state.draw.A.zoom.tx=Number(meta.overlay.zoomA.tx)||0;
+        state.draw.A.zoom.ty=Number(meta.overlay.zoomA.ty)||0;
+      }
+      if(meta.overlay.zoomB){
+        state.draw.B.zoom.scale=Math.max(1,Math.min(5,Number(meta.overlay.zoomB.scale)||1));
+        state.draw.B.zoom.tx=Number(meta.overlay.zoomB.tx)||0;
+        state.draw.B.zoom.ty=Number(meta.overlay.zoomB.ty)||0;
+      }
+      setOverlayPanTarget(meta.overlay.panTarget||'A');
+      applyOverlayBlend();
+      if(meta.overlay.enabled && state.fileA && state.fileB)setOverlayMode(true);
+    }
+    setSpeeds('A');updateOffsets();
+    $('saveDate').value=meta.date||todayLocal();
+    $('saveCategory').value=meta.category||'';
+    $('saveDesc').value=meta.description||'';
+    setTimeout(()=>{
+      if(meta.videoA?.currentTime && $('videoA').src) $('videoA').currentTime=clampTime($('videoA'),meta.videoA.currentTime);
+      if(meta.videoB?.currentTime && $('videoB').src) $('videoB').currentTime=clampTime($('videoB'),meta.videoB.currentTime);
+      canvA.redraw();canvB.redraw();
+    },250);
+    applyStartupContext('saved',meta.players||[],meta.date||'',meta.category||'',meta.description||'');
+    if($('savedDialog').open) $('savedDialog').close();
+    setStatus(`Opened saved analysis from <b>${meta.date}</b> — <b>${safeName(meta.category)}</b>${meta.description?' — '+safeName(meta.description):''}. You can continue editing and save again.`,'ok');
+  }catch(err){
+    $('savedSessionsMsg').textContent='Could not open that session: '+(err.message||err);
+  }
+}
+function renderPlayers(){
+  const box=$('playersList');box.innerHTML='';
+  for(const name of state.players){
+    const lab=document.createElement('label');lab.className='player';
+    const cb=document.createElement('input');cb.type='checkbox';cb.value=name;cb.className='playerCheck';
+    cb.checked=state.sessionContext.players.includes(name);
+    const span=document.createElement('span');span.textContent=name;
+    lab.append(cb,span);box.append(lab);cb.addEventListener('change',renderSavePreview);
+  }
+}
+function selectedPlayers(){return [...document.querySelectorAll('.playerCheck:checked')].map(x=>x.value)}
+
+async function showSavedAnalyses(){
+  const list=$('savedSessionsList'),msg=$('savedSessionsMsg');
+  list.innerHTML='';msg.textContent='Reading App/Data…';
+  $('savedDialog').showModal();
+  const sessions=await listSavedSessions();
+  msg.textContent=sessions.length?`${sessions.length} saved session${sessions.length===1?'':'s'} found.`:'No saved analysis records were found in App/Data yet.';
+  for(const entry of sessions){
+    const m=entry.meta;
+    const row=document.createElement('div');row.className='session-item';
+    const meta=document.createElement('div');meta.className='meta';
+    const title=document.createElement('b');title.textContent=`${m.date} — ${m.category}${m.description?' — '+m.description:''}`;
+    const sub=document.createElement('span');sub.className='small';sub.textContent=`${(m.players||[]).join(', ') || 'No player recorded'}${m.imported?' • imported old analysis':''}`;
+    const btn=document.createElement('button');btn.type='button';btn.className='btn primary';btn.textContent='Open';
+    btn.addEventListener('click',()=>openSavedSession(entry));
+    meta.append(title,sub);row.append(meta,btn);list.append(row);
+  }
+}
+$('openSavedBtn').addEventListener('click',showSavedAnalyses);
+$('closeSavedDialog').addEventListener('click',()=>$('savedDialog').close());
+
+function renderImportPlayers(){
+  const box=$('importPlayersList');box.innerHTML='';
+  for(const name of state.players){
+    const lab=document.createElement('label');lab.className='player';
+    const cb=document.createElement('input');cb.type='checkbox';cb.value=name;cb.className='importPlayerCheck';
+    const span=document.createElement('span');span.textContent=name;
+    lab.append(cb,span);box.append(lab);cb.addEventListener('change',renderImportPreview);
+  }
+}
+function selectedImportPlayers(){
+  return [...document.querySelectorAll('.importPlayerCheck:checked')].map(x=>x.value);
+}
+function renderImportPreview(){
+  const players=selectedImportPlayers(),date=$('importDate').value,cat=$('importCategory').value,desc=$('importDesc').value.trim();
+  const files=[...$('importFiles').files];
+  if(!players.length||!date||!cat||!files.length){
+    $('importPreview').textContent='Choose at least one player, a date, category and one existing analysis file.';
+    return;
+  }
+  const session=sessionFolderName(date,cat,desc);
+  $('importPreview').textContent=players.map(p=>`${p}/\n  ${session}/\n    ${files.map(f=>safeName(f.name)).join('\n    ')}`).join('\n\n');
+}
+$('importOldBtn').addEventListener('click',()=>{
+  renderImportPlayers();
+  $('importDate').value=todayLocal();
+  $('importCategory').value='';
+  $('importDesc').value='';
+  $('importFiles').value='';
+  $('importMsg').textContent='';
+  renderImportPreview();
+  $('importDialog').showModal();
+});
+$('closeImportDialog').addEventListener('click',()=>$('importDialog').close());
+$('cancelImport').addEventListener('click',()=>$('importDialog').close());
+['importDate','importCategory','importDesc','importFiles'].forEach(id=>$(id).addEventListener('input',renderImportPreview));
+$('importFiles').addEventListener('change',renderImportPreview);
+
+$('importForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  const players=selectedImportPlayers(),date=$('importDate').value,cat=$('importCategory').value,desc=$('importDesc').value.trim();
+  const files=[...$('importFiles').files];
+  if(!players.length||!date||!cat||!files.length){
+    $('importMsg').textContent='Select at least one player, date, category and file.';
+    return;
+  }
+  if(!state.playersDir||!state.dataDir){
+    $('importMsg').textContent='Select the Video Analysis folder first.';
+    return;
+  }
+  $('confirmImport').disabled=true;$('importMsg').textContent='Importing…';
+  try{
+    const session=sessionFolderName(date,cat,desc),base=baseFileName(date,cat,desc);
+    for(const player of players){
+      const pdir=await state.playersDir.getDirectoryHandle(player);
+      const sdir=await ensureDir(pdir,session);
+      for(const f of files){
+        await writeBlob(sdir,safeName(f.name),f);
+      }
+    }
+    const importedVideos=files.filter(f=>f.type.startsWith('video/'));
+    const importedImages=files.filter(f=>f.type.startsWith('image/'));
+    const metaObj={
+      version:2,
+      imported:true,
+      savedAt:new Date().toISOString(),
+      players,date,category:cat,description:desc,
+      importedFiles:files.map(f=>({name:f.name,type:f.type,size:f.size})),
+      videoA:importedVideos[0]?{name:importedVideos[0].name,speed:1,offset:0,currentTime:0}:null,
+      videoB:importedVideos[1]?{name:importedVideos[1].name,speed:1,offset:0,currentTime:0}:null,
+      linked:true,
+      annotations:{A:[],B:[]},
+      screenshots:importedImages.map((f,i)=>({index:i+1,name:f.name}))
+    };
+    const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+    await writeBlob(state.dataDir,`${base}_${stamp}_imported.json`,new Blob([JSON.stringify(metaObj,null,2)],{type:'application/json'}));
+    $('importDialog').close();
+    setStatus(`Imported <b>${files.length}</b> existing file${files.length===1?'':'s'} into <b>${players.length}</b> player folder${players.length===1?'':'s'}, with a new record in <b>App/Data</b>.`,'ok');
+  }catch(err){
+    $('importMsg').textContent='Import failed: '+(err.message||err);
+  }finally{
+    $('confirmImport').disabled=false;
+  }
+});
+
+
+function readU16(view,off){return view.getUint16(off,true)}
+function readU32(view,off){return view.getUint32(off,true)}
+function decodeZipName(bytes){return new TextDecoder('utf-8').decode(bytes)}
+
+async function unzipEntryData(method,compressedBlob,expectedSize){
+  if(method===0) return compressedBlob;
+  if(method===8){
+    if(!('DecompressionStream' in window)) throw new Error('This ZIP uses compression that this browser cannot open. Use ZIPs exported by this Video Analysis app.');
+    const stream=compressedBlob.stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    const blob=await new Response(stream).blob();
+    if(expectedSize && blob.size!==expectedSize){
+      // Keep the data even if the declared size differs; some ZIP tools write unusual metadata.
+    }
+    return blob;
+  }
+  throw new Error(`Unsupported ZIP compression method (${method}). Use ZIPs exported by this Video Analysis app.`);
+}
+
+async function readZipEntries(file){
+  const buf=await file.arrayBuffer(), view=new DataView(buf), bytes=new Uint8Array(buf);
+  let eocd=-1;
+  const min=Math.max(0,buf.byteLength-65557);
+  for(let i=buf.byteLength-22;i>=min;i--){
+    if(readU32(view,i)===0x06054b50){eocd=i;break}
+  }
+  if(eocd<0) throw new Error('Not a valid ZIP file.');
+  const total=readU16(view,eocd+10), centralOffset=readU32(view,eocd+16);
+  let off=centralOffset;
+  const entries=[];
+  for(let i=0;i<total;i++){
+    if(readU32(view,off)!==0x02014b50) throw new Error('ZIP directory is damaged.');
+    const method=readU16(view,off+10);
+    const compressedSize=readU32(view,off+20);
+    const uncompressedSize=readU32(view,off+24);
+    const nameLen=readU16(view,off+28), extraLen=readU16(view,off+30), commentLen=readU16(view,off+32);
+    const localOffset=readU32(view,off+42);
+    const name=decodeZipName(bytes.slice(off+46,off+46+nameLen));
+    if(readU32(view,localOffset)!==0x04034b50) throw new Error(`ZIP entry ${name} is damaged.`);
+    const localNameLen=readU16(view,localOffset+26), localExtraLen=readU16(view,localOffset+28);
+    const dataStart=localOffset+30+localNameLen+localExtraLen;
+    const compressedBlob=file.slice(dataStart,dataStart+compressedSize);
+    const blob=await unzipEntryData(method,compressedBlob,uncompressedSize);
+    entries.push({name,blob,size:uncompressedSize,method});
+    off+=46+nameLen+extraLen+commentLen;
+  }
+  return entries;
+}
+
+function guessMimeFromName(name){
+  const ext=(name.split('.').pop()||'').toLowerCase();
+  const map={
+    mp4:'video/mp4',mov:'video/quicktime',m4v:'video/x-m4v',webm:'video/webm',
+    png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',json:'application/json',txt:'text/plain'
+  };
+  return map[ext]||'application/octet-stream';
+}
+function withType(blob,name){
+  return blob.type?blob:new Blob([blob],{type:guessMimeFromName(name)});
+}
+function batchSessionTitle(meta){
+  return `${meta.date||'No date'} — ${meta.category||'No category'}${meta.description?' — '+meta.description:''}`;
+}
+function parseBatchPlayers(value){
+  return [...new Set(
+    String(value||'')
+      .split(/\r?\n|,/)
+      .map(x=>x.trim())
+      .filter(Boolean)
+  )];
+}
+function validateBatchItem(item){
+  item.errors=[];
+  item.warnings=[];
+  const meta=item.meta||{};
+  if(!Array.isArray(meta.players)||!meta.players.length)item.errors.push('Select or enter at least one player.');
+  if(!meta.date)item.errors.push('Choose a session date.');
+  if(!meta.category)item.errors.push('Choose a category.');
+  const media=(item.entries||[]).filter(e=>/\.(mp4|mov|m4v|webm)$/i.test(e.name));
+  if(!media.length)item.errors.push('No source video is inside this ZIP.');
+  const missing=(meta.players||[]).filter(p=>!state.players.includes(p));
+  if(missing.length)item.warnings.push(`New player folder${missing.length===1?'':'s'} will be created: ${missing.join(', ')}`);
+  item.status=item.errors.length?'error':(item.warnings.length?'warn':'ok');
+}
+async function buildBatchSession(file,source='picker',handle=null){
+  const item={file,source,handle,name:file.name,status:'loading',errors:[],warnings:[],meta:null,entries:[]};
+  try{
+    const entries=await readZipEntries(file);
+    item.entries=entries;
+    const jsonEntry=entries.find(e=>/(^|\/)analysis\.json$/i.test(e.name))
+      || entries.find(e=>e.name.toLowerCase().endsWith('.json'));
+    if(!jsonEntry) throw new Error('No analysis.json was found.');
+    const meta=JSON.parse(await jsonEntry.blob.text());
+    meta.players=Array.isArray(meta.players)?meta.players:[];
+    meta.date=meta.date||'';
+    meta.category=meta.category||'';
+    meta.description=meta.description||'';
+    item.meta=meta;
+    validateBatchItem(item);
+  }catch(err){
+    item.errors=[err.message||String(err)];
+    item.status='error';
+  }
+  return item;
+}
+function updateBatchSummary(){
+  let valid=0,errors=0,newPlayers=new Set();
+  for(const item of state.batchSessions){
+    if(item.meta) validateBatchItem(item);
+    if(item.status==='error')errors++;else valid++;
+    for(const p of item.meta?.players||[])if(!state.players.includes(p))newPlayers.add(p);
+  }
+  $('batchImportSummary').innerHTML=state.batchSessions.length
+    ? `<b>${valid}</b> valid session${valid===1?'':'s'} ready to import${errors?`, <b>${errors}</b> with problems`:''}${newPlayers.size?`. <b>${newPlayers.size}</b> new player folder${newPlayers.size===1?'':'s'} will be created.`:'.'}`
+    : 'No ZIP sessions loaded yet.';
+  $('confirmBatchImport').disabled=valid===0;
+}
+function makeBatchCategorySelect(item,index){
+  const select=document.createElement('select');
+  const standard=['','Batting','Bowling','Fielding','Wicketkeeping','Fitness','Other'];
+  const current=item.meta.category||'';
+  const values=standard.includes(current)?standard:[...standard,current];
+  for(const val of values){
+    const opt=document.createElement('option');
+    opt.value=val;
+    opt.textContent=val||'Select…';
+    if(val===current)opt.selected=true;
+    select.append(opt);
+  }
+  select.addEventListener('change',()=>{
+    item.meta.category=select.value;
+    renderBatchSessions();
+  });
+  return select;
+}
+function renderBatchSessions(){
+  const box=$('batchImportList');
+  box.innerHTML='';
+  for(let index=0;index<state.batchSessions.length;index++){
+    const item=state.batchSessions[index];
+    if(item.meta)validateBatchItem(item);
+
+    const div=document.createElement('div');
+    div.className=`batch-item ${item.status==='error'?'err':item.status}`;
+
+    const title=document.createElement('div');
+    title.className='batch-title';
+    title.textContent=item.meta?batchSessionTitle(item.meta):item.name;
+
+    const metaLine=document.createElement('div');
+    metaLine.className='batch-meta';
+    const videos=item.entries.filter(e=>/\.(mp4|mov|m4v|webm)$/i.test(e.name)).length;
+    const shots=item.entries.filter(e=>/\.(png|jpe?g)$/i.test(e.name)).length;
+    metaLine.textContent=item.meta
+      ? `ZIP: ${item.name} • ${videos} video${videos===1?'':'s'} • ${shots} screenshot${shots===1?'':'s'}`
+      : `ZIP: ${item.name}`;
+
+    div.append(title,metaLine);
+
+    if(item.meta){
+      const edit=document.createElement('div');
+      edit.className='batch-edit-grid';
+
+      const dateLab=document.createElement('label');
+      dateLab.textContent='Date';
+      const date=document.createElement('input');
+      date.type='date';date.value=item.meta.date||'';
+      date.addEventListener('change',()=>{item.meta.date=date.value;renderBatchSessions()});
+      dateLab.append(date);
+
+      const catLab=document.createElement('label');
+      catLab.textContent='Category';
+      catLab.append(makeBatchCategorySelect(item,index));
+
+      const descLab=document.createElement('label');
+      descLab.textContent='Description';
+      const desc=document.createElement('input');
+      desc.type='text';desc.value=item.meta.description||'';
+      desc.placeholder='e.g. Front foot technique';
+      desc.addEventListener('change',()=>{item.meta.description=desc.value.trim();renderBatchSessions()});
+      descLab.append(desc);
+
+      const playersLab=document.createElement('label');
+      playersLab.className='batch-edit-wide';
+      playersLab.textContent='Players';
+      const players=document.createElement('textarea');
+      players.value=(item.meta.players||[]).join('\n');
+      players.placeholder='One player per line, or separate names with commas';
+      players.addEventListener('change',()=>{
+        item.meta.players=parseBatchPlayers(players.value);
+        renderBatchSessions();
+      });
+      playersLab.append(players);
+
+      edit.append(dateLab,catLab,descLab,playersLab);
+      div.append(edit);
+
+      const path=document.createElement('div');
+      path.className='batch-preview-path';
+      const session=(item.meta.date&&item.meta.category)
+        ? sessionFolderName(item.meta.date,item.meta.category,item.meta.description)
+        : 'Complete date/category to preview folder';
+      path.textContent=(item.meta.players||[]).length
+        ? `Will save to: ${(item.meta.players||[]).map(p=>`Players/${p}/${session}`).join('  |  ')}`
+        : `Will save to: ${session}`;
+      div.append(path);
+    }
+
+    if(item.warnings?.length){
+      const warning=document.createElement('div');
+      warning.className='batch-meta';
+      warning.style.marginTop='7px';
+      warning.textContent='Note: '+item.warnings.join(' ');
+      div.append(warning);
+    }
+    if(item.errors?.length){
+      const error=document.createElement('div');
+      error.className='batch-meta';
+      error.style.marginTop='7px';
+      error.textContent='Problem: '+item.errors.join(' ');
+      div.append(error);
+    }
+
+    box.append(div);
+  }
+  updateBatchSummary();
+}
+async function addBatchFiles(files,source='picker',handlesByName=new Map()){
+  $('batchImportMsg').textContent='Reading session ZIPs…';
+  const added=[];
+  for(const file of files){
+    if(!file.name.toLowerCase().endsWith('.zip'))continue;
+    added.push(await buildBatchSession(file,source,handlesByName.get(file.name)||null));
+  }
+  const existing=new Set(state.batchSessions.map(x=>`${x.name}|${x.file.size}|${x.file.lastModified}`));
+  for(const item of added){
+    const key=`${item.name}|${item.file.size}|${item.file.lastModified}`;
+    if(!existing.has(key)){state.batchSessions.push(item);existing.add(key)}
+  }
+  renderBatchSessions();
+  $('batchImportMsg').textContent=added.length?`Read ${added.length} ZIP file${added.length===1?'':'s'}.`:'No ZIP files were found.';
+}
+async function scanMobileUploads(){
+  if(!state.mobileDir){$('batchImportMsg').textContent='Select the main Video Analysis folder first.';return}
+  $('batchImportMsg').textContent='Scanning Mobile Uploads…';
+  const files=[],handles=new Map();
+  for await (const [name,handle] of state.mobileDir.entries()){
+    if(handle.kind==='file'&&name.toLowerCase().endsWith('.zip')){
+      const file=await handle.getFile();
+      files.push(file);handles.set(file.name,handle);
+    }
+  }
+  if(!files.length){
+    $('batchImportMsg').textContent='No ZIP files are waiting in Mobile Uploads.';
+    return;
+  }
+  await addBatchFiles(files,'mobile',handles);
+}
+async function uniqueFileName(dir,name){
+  try{await dir.getFileHandle(name); }catch{return name}
+  const dot=name.lastIndexOf('.'),stem=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):'';
+  for(let i=2;i<10000;i++){
+    const candidate=`${stem} (${i})${ext}`;
+    try{await dir.getFileHandle(candidate);}catch{return candidate}
+  }
+  return `${stem}-${Date.now()}${ext}`;
+}
+async function archiveMobileZip(item){
+  if(item.source!=='mobile'||!item.handle||!state.mobileDir)return;
+  const importedDir=await state.mobileDir.getDirectoryHandle('Imported',{create:true});
+  const archiveName=await uniqueFileName(importedDir,item.name);
+  await writeBlob(importedDir,archiveName,item.file);
+  await state.mobileDir.removeEntry(item.name);
+}
+async function importBatchItem(item){
+  validateBatchItem(item);
+  if(item.errors.length)throw new Error(item.errors.join(' '));
+
+  const meta={...item.meta};
+  meta.players=parseBatchPlayers(meta.players);
+  meta.date=String(meta.date||'');
+  meta.category=String(meta.category||'');
+  meta.description=String(meta.description||'').trim();
+  meta.importedAt=new Date().toISOString();
+  meta.importEdited=true;
+
+  const players=meta.players.map(safeName).filter(Boolean);
+  const session=sessionFolderName(meta.date,meta.category,meta.description);
+  const base=baseFileName(meta.date,meta.category,meta.description);
+
+  const contentEntries=item.entries.filter(e=>{
+    const n=e.name.split('/').pop();
+    return n && !/\.json$/i.test(n) && !/^README\.txt$/i.test(n);
+  });
+
+  for(const player of players){
+    const pdir=await state.playersDir.getDirectoryHandle(player,{create:true});
+    const sdir=await ensureDir(pdir,session);
+    for(const entry of contentEntries){
+      const originalName=safeName(entry.name.split('/').pop());
+      if(!originalName)continue;
+
+      // Keep the source/screenshot extension but standardise filenames around the edited session details.
+      let filename=originalName;
+      const ext=originalName.includes('.')?'.'+originalName.split('.').pop():'';
+      if(/_A_(original|ORIGINAL)/i.test(originalName)) filename=`${base}_A_original${ext}`;
+      else if(/_B_(original|ORIGINAL)/i.test(originalName)) filename=`${base}_B_original${ext}`;
+      else {
+        const sm=originalName.match(/_([AB])_screenshot_(\d+)/i);
+        if(sm) filename=`${base}_${sm[1].toUpperCase()}_screenshot_${sm[2].padStart(2,'0')}${ext}`;
+      }
+      await writeBlob(sdir,filename,withType(entry.blob,filename));
+    }
+  }
+
+  // Store a corrected JSON reflecting any edits made in the batch-import screen.
+  const correctedJson=new Blob([JSON.stringify(meta,null,2)],{type:'application/json'});
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const id=safeName(meta.sessionId||base||'session');
+  await writeBlob(state.dataDir,`${base}_${id}_${stamp}_analysis.json`,correctedJson);
+
+  await archiveMobileZip(item);
+}
+$('batchImportBtn').addEventListener('click',()=>{
+  state.batchSessions=[];
+  renderBatchSessions();
+  $('batchImportMsg').textContent='';
+  $('batchImportDialog').showModal();
+});
+$('closeBatchImport').addEventListener('click',()=>$('batchImportDialog').close());
+$('clearBatchImport').addEventListener('click',()=>{state.batchSessions=[];renderBatchSessions();$('batchImportMsg').textContent='';});
+$('scanMobileUploadsBtn').addEventListener('click',scanMobileUploads);
+$('batchZipPicker').addEventListener('change',async ev=>{
+  await addBatchFiles([...ev.target.files],'picker');
+  ev.target.value='';
+});
+$('confirmBatchImport').addEventListener('click',async()=>{
+  const valid=state.batchSessions.filter(x=>x.status!=='error');
+  if(!valid.length)return;
+  $('confirmBatchImport').disabled=true;
+  $('batchImportMsg').textContent=`Importing ${valid.length} session${valid.length===1?'':'s'}…`;
+  let done=0,failed=0;
+  for(const item of valid){
+    try{
+      await importBatchItem(item);
+      item.status='imported';
+      done++;
+    }catch(err){
+      item.status='error';
+      item.errors.push('Import failed: '+(err.message||err));
+      failed++;
+    }
+    renderBatchSessions();
+  }
+  // Refresh player list in case new folders were created.
+  const names=[];
+  for await (const [name,handle] of state.playersDir.entries())if(handle.kind==='directory')names.push(name);
+  names.sort((a,b)=>a.localeCompare(b));
+  state.players=names;
+  renderPlayers();renderStartupPlayers();
+  $('batchImportMsg').textContent=failed
+    ? `${done} session${done===1?'':'s'} imported; ${failed} failed. Check the items above.`
+    : `${done} session${done===1?'':'s'} imported successfully. ZIPs that came from Mobile Uploads were moved into Mobile Uploads/Imported.`;
+  setStatus(`Batch import complete: <b>${done}</b> mobile session${done===1?'':'s'} filed into the correct player folders and analysis metadata saved to <b>App/Data</b>.`,'ok');
+  state.batchSessions=state.batchSessions.filter(x=>x.status==='error');
+  renderBatchSessions();
+  $('confirmBatchImport').disabled=false;
+});
+
+function renderSavePreview(){
+  const players=selectedPlayers(),date=$('saveDate').value,cat=$('saveCategory').value,desc=$('saveDesc').value.trim();
+  if(!players.length||!date||!cat){$('savePreview').textContent='Select at least one player, a date and a category.';return}
+  const session=`${date} ${safeName(cat)}${desc?' - '+safeName(desc):''}`;
+  const files=[];
+  if(state.fileA)files.push(`${date}_${slug(cat)}${desc?'_'+slug(desc):''}_A_ORIGINAL${extOf(state.fileA)}`);
+  if(state.fileB)files.push(`${date}_${slug(cat)}${desc?'_'+slug(desc):''}_B_ORIGINAL${extOf(state.fileB)}`);
+  const directFiles=[
+    ...files,
+    ...state.screenshots.map((s,i)=>`${date}_${slug(cat)}${desc?'_'+slug(desc):''}_${s.letter}_screenshot_${String(i+1).padStart(2,'0')}.png`)
+  ];
+  if(state.portableMode){
+    $('savePreview').textContent=`Portable export ZIP\n\nPlayers: ${players.join(', ')}\nSession: ${session}\n\n${directFiles.join('\n')}\nanalysis.json`;
+    return;
+  }
+  $('savePreview').textContent=players.map(p=>`${p}/\n  ${session}/\n    ${directFiles.join('\n    ')}`).join('\n\n');
+}
+['saveDate','saveCategory','saveDesc'].forEach(id=>$(id).addEventListener('input',renderSavePreview));
+$('saveBtn').addEventListener('click',()=>{
+  renderPlayers();
+  if(state.sessionContext.date) $('saveDate').value=state.sessionContext.date;
+  if(state.sessionContext.category) $('saveCategory').value=state.sessionContext.category;
+  if(state.sessionContext.description) $('saveDesc').value=state.sessionContext.description;
+  renderSavePreview();
+  $('saveDialog').showModal();
+});
+$('closeDialog').addEventListener('click',()=>$('saveDialog').close());
+$('cancelSave').addEventListener('click',()=>$('saveDialog').close());
+
+async function ensureDir(parent,name){return await parent.getDirectoryHandle(name,{create:true})}
+async function writeBlob(dir,name,data){
+  const h=await dir.getFileHandle(name,{create:true});const w=await h.createWritable();await w.write(data);await w.close();
+}
+
+const crcTable=(()=>{
+  const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c=n;
+    for(let k=0;k<8;k++) c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1);
+    t[n]=c>>>0;
+  }
+  return t;
+})();
+async function crc32Blob(blob){
+  let crc=0xffffffff;
+  if(blob.stream){
+    const reader=blob.stream().getReader();
+    while(true){
+      const {value,done}=await reader.read();
+      if(done)break;
+      for(const b of value) crc=crcTable[(crc^b)&0xff]^(crc>>>8);
+    }
+  }else{
+    const value=new Uint8Array(await blob.arrayBuffer());
+    for(const b of value) crc=crcTable[(crc^b)&0xff]^(crc>>>8);
+  }
+  return (crc^0xffffffff)>>>0;
+}
+function u16(n){return new Uint8Array([n&255,(n>>>8)&255])}
+function u32(n){return new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255])}
+function concatBytes(parts){
+  const len=parts.reduce((s,p)=>s+p.length,0),out=new Uint8Array(len);let off=0;
+  for(const p of parts){out.set(p,off);off+=p.length}
+  return out;
+}
+async function makeStoredZip(entries){
+  const enc=new TextEncoder(),parts=[],central=[];
+  let offset=0;
+  for(const entry of entries){
+    const nameBytes=enc.encode(entry.name.replace(/^\/+/,''));
+    const blob=entry.blob instanceof Blob?entry.blob:new Blob([entry.blob]);
+    const size=blob.size;
+    if(size>0xffffffff) throw new Error('A file is too large for the portable ZIP format.');
+    const crc=await crc32Blob(blob);
+    const local=concatBytes([
+      u32(0x04034b50),u16(20),u16(0x0800),u16(0),u16(0),u16(0),
+      u32(crc),u32(size),u32(size),u16(nameBytes.length),u16(0),nameBytes
+    ]);
+    parts.push(local,blob);
+    const cd=concatBytes([
+      u32(0x02014b50),u16(20),u16(20),u16(0x0800),u16(0),u16(0),u16(0),
+      u32(crc),u32(size),u32(size),u16(nameBytes.length),u16(0),u16(0),
+      u16(0),u16(0),u32(0),u32(offset),nameBytes
+    ]);
+    central.push(cd);
+    offset+=local.length+size;
+  }
+  const centralSize=central.reduce((s,p)=>s+p.length,0);
+  const end=concatBytes([
+    u32(0x06054b50),u16(0),u16(0),u16(entries.length),u16(entries.length),
+    u32(centralSize),u32(offset),u16(0)
+  ]);
+  return new Blob([...parts,...central,end],{type:'application/zip'});
+}
+async function exportPortableSession(players,date,cat,desc){
+  const base=`${date}_${slug(cat)}${desc?'_'+slug(desc):''}`;
+  const metaBlob=new Blob([JSON.stringify(analysisData(players,date,cat,desc),null,2)],{type:'application/json'});
+  const entries=[{name:'analysis.json',blob:metaBlob}];
+  if(state.fileA)entries.push({name:`${base}_A_original${extOf(state.fileA)}`,blob:state.fileA});
+  if(state.fileB)entries.push({name:`${base}_B_original${extOf(state.fileB)}`,blob:state.fileB});
+  for(let i=0;i<state.screenshots.length;i++){
+    const s=state.screenshots[i];
+    entries.push({name:`${base}_${s.letter}_screenshot_${String(i+1).padStart(2,'0')}.png`,blob:s.blob});
+  }
+  entries.push({
+    name:'README.txt',
+    blob:new Blob([
+      `Video Analysis portable session\nPlayers: ${players.join(', ')}\nDate: ${date}\nCategory: ${cat}\nDescription: ${desc||''}\n\nThe JSON file stores editable annotations and playback settings.`
+    ],{type:'text/plain'})
+  });
+  const zip=await makeStoredZip(entries);
+  const filename=`${base}_VideoAnalysis.zip`;
+  const file=new File([zip],filename,{type:'application/zip',lastModified:Date.now()});
+  state.pendingExport={blob:zip,file,filename};
+  return filename;
+}
+
+function clearPendingExport(){
+  state.pendingExport=null;
+  $('exportReadyMsg').textContent='';
+}
+function openExportReady(){
+  const exp=state.pendingExport;
+  if(!exp)return;
+  $('exportReadyName').innerHTML=`<b>${safeName(exp.filename)}</b><br><span class="small">${(exp.blob.size/1024/1024).toFixed(1)} MB</span>`;
+  $('exportReadyMsg').textContent='';
+  if(!$('exportReadyDialog').open)$('exportReadyDialog').showModal();
+}
+async function sharePendingExport(){
+  const exp=state.pendingExport;
+  if(!exp)return;
+  $('exportReadyMsg').textContent='';
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[exp.file]}))){
+      await navigator.share({
+        files:[exp.file],
+        title:'Video Analysis session',
+        text:'Video Analysis session ZIP'
+      });
+      $('exportReadyMsg').textContent='Share sheet opened successfully. Choose Save to Files or OneDrive to keep the session.';
+      return;
+    }
+    $('exportReadyMsg').textContent='Native file sharing is not available here. Use Download ZIP instead.';
+  }catch(err){
+    if(err?.name==='AbortError'){
+      $('exportReadyMsg').textContent='Share cancelled. Tap Share / Save ZIP again when ready.';
+    }else{
+      $('exportReadyMsg').textContent='Could not open the share sheet. Try Download ZIP instead.';
+    }
+  }
+}
+function downloadPendingExport(){
+  const exp=state.pendingExport;
+  if(!exp)return;
+  try{
+    const url=URL.createObjectURL(exp.blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=exp.filename;
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    $('exportReadyMsg').textContent='Download requested. If nothing appears on iPad, use Share / Save ZIP instead.';
+  }catch(err){
+    $('exportReadyMsg').textContent='Download could not start. Use Share / Save ZIP instead.';
+  }
+}
+$('shareExportBtn').addEventListener('click',sharePendingExport);
+$('downloadExportBtn').addEventListener('click',downloadPendingExport);
+$('closeExportReady').addEventListener('click',()=>{
+  if($('exportReadyDialog').open)$('exportReadyDialog').close();
+});
+function analysisData(players,date,cat,desc){
+  const sessionId=(crypto?.randomUUID?.()||(`session-${Date.now()}-${Math.random().toString(16).slice(2)}`));
+  return {
+    version:4, sessionId, savedAt:new Date().toISOString(), players, date, category:cat, description:desc,
+    sessionFolder:sessionFolderName(date,cat,desc),
+    baseName:baseFileName(date,cat,desc),
+    videoA:state.fileA?{name:state.fileA.name,speed:Number($('speedA').value),offset:Number($('offsetA').value),currentTime:$('videoA').currentTime}:null,
+    videoB:state.fileB?{name:state.fileB.name,speed:Number($('speedB').value),offset:Number($('offsetB').value),currentTime:$('videoB').currentTime}:null,
+    linked:$('linkPlayback').checked,
+    overlay:{
+      enabled:state.overlayMode,
+      blend:state.overlayBlend,
+      panTarget:state.overlayPanTarget,
+      shiftA:{x:state.overlayShift.A.x,y:state.overlayShift.A.y},
+      shiftB:{x:state.overlayShift.B.x,y:state.overlayShift.B.y},
+      zoomA:{scale:state.draw.A.zoom.scale,tx:state.draw.A.zoom.tx,ty:state.draw.A.zoom.ty},
+      zoomB:{scale:state.draw.B.zoom.scale,tx:state.draw.B.zoom.tx,ty:state.draw.B.zoom.ty}
+    },
+    annotations:{A:state.draw.A.items,B:state.draw.B.items},
+    screenshots:state.screenshots.map((s,i)=>({index:i+1,video:s.letter,time:s.time}))
+  };
+}
+$('saveForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  const players=selectedPlayers(),date=$('saveDate').value,cat=$('saveCategory').value,desc=$('saveDesc').value.trim();
+  if(!players.length||!date||!cat){$('saveMsg').textContent='Select at least one player, a date and a category.';return}
+  applyStartupContext(state.sessionContext.mode||'new',players,date,cat,desc);
+  if(!state.fileA&&!state.fileB){$('saveMsg').textContent='Load or record at least one source video before saving.';return}
+  if(!state.portableMode && (!state.playersDir||!state.dataDir)){$('saveMsg').textContent='Select the Video Analysis folder first.';return}
+  $('confirmSave').disabled=true;$('saveMsg').textContent=state.portableMode?'Preparing portable ZIP…':'Saving…';
+  try{
+    if(state.portableMode){
+      const filename=await exportPortableSession(players,date,cat,desc);
+      $('saveDialog').close();
+      setStatus(`Session ZIP prepared as <b>${safeName(filename)}</b>. Tap <b>Share / Save ZIP</b> and choose Files or OneDrive.`,'ok');
+      openExportReady();
+      return;
+    }
+    const session=`${date} ${safeName(cat)}${desc?' - '+safeName(desc):''}`;
+    const base=`${date}_${slug(cat)}${desc?'_'+slug(desc):''}`;
+    const meta=JSON.stringify(analysisData(players,date,cat,desc),null,2);
+    for(const player of players){
+      const pdir=await state.playersDir.getDirectoryHandle(player);
+      const sdir=await ensureDir(pdir,session);
+      if(state.fileA)await writeBlob(sdir,`${base}_A_original${extOf(state.fileA)}`,state.fileA);
+      if(state.fileB)await writeBlob(sdir,`${base}_B_original${extOf(state.fileB)}`,state.fileB);
+      for(let i=0;i<state.screenshots.length;i++){
+        const s=state.screenshots[i];
+        await writeBlob(sdir,`${base}_${s.letter}_screenshot_${String(i+1).padStart(2,'0')}.png`,s.blob);
+      }
+    }
+    const metadataStamp=new Date().toISOString().replace(/[:.]/g,'-');
+    await writeBlob(
+      state.dataDir,
+      `${base}_${metadataStamp}_analysis.json`,
+      new Blob([meta],{type:'application/json'})
+    );
+    $('saveDialog').close();
+    setStatus(`Saved successfully to <b>${players.length}</b> player folder${players.length===1?'':'s'}. Technical session data was stored separately in <b>App/Data</b>. OneDrive will now sync the files back to SharePoint.`,'ok');
+  }catch(err){
+    $('saveMsg').textContent='Save failed: '+(err.message||err);
+  }finally{
+    $('confirmSave').disabled=false;
+  }
+});
+
+window.addEventListener('beforeunload',()=>{if(state.urlA)URL.revokeObjectURL(state.urlA);if(state.urlB)URL.revokeObjectURL(state.urlB)});
+$('startupDate').value=todayLocal();
+updateStartupModeUI();
+
+initializePlayerRosters().finally(()=>{
+  if(!('showDirectoryPicker' in window)){
+    enterPortableMode();
+  }else{
+    enterDesktopMode();
+  }
+  renderRosterSelect();
+  updateRosterStatus();
+  setTimeout(()=>{if(!$('startupDialog').open)$('startupDialog').showModal()},50);
+});
+
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+}
+$('dismissIosHint')?.addEventListener('click',()=>{
+  sessionStorage.setItem('hideIosInstallHint','1');
+  $('iosInstallHint')?.classList.remove('show');
+});
+window.addEventListener('pageshow',updateIosInstallHint);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateIosInstallHint()});
+updateIosInstallHint();
+})();
+</script>
+</body>
+</html>
